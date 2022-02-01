@@ -11,7 +11,7 @@ I seguenti pacchetti sono necessari per la compilazione:
 
 ## Installazione dei pacchetti
 
-Per installare mipsel-linux-gnu-gcc (Testato su Debian 11, potrebbe variare in base alla [distribuzione](https://github.com/virtualsquare/umps3)):
+Per installare mipsel-linux-gnu-gcc (Testato su Debian 11, potrebbe variare in base alla [distribuzione](https://github.com/virtualsquare/umps3#how-to-install)):
 ```bash
 $ sudo apt install gcc-mipsel-linux-gnu
 ```
