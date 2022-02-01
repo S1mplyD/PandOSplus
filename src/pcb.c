@@ -14,30 +14,22 @@ inizializzazione della struttura dati.
 
 
 void initPcbs(){
-    /*
-    static pcb_t pcbFree_table[MAXPROC];
-   
-    INIT_LIST_HEAD(pcbFree_h);
 
-    int i;
-    for(i = 0; i < MAXPROC; i++){
-        freePcb(&pcbFree_table[i]);
-    }*/
-    //array di PCB con dimensione massima di MAX_PROC
+    // Array di PCB con dimensione massima di MAX_PROC
     
     static pcb_t pcbFree_table[MAXPROC];
 
-    //lista dei PCB liberi o inutilizzati
+    // Lista dei PCB liberi o inutilizzati
     static pcb_t *pcbFree;
 
-    /* creazione sentinella lista pcbFree */
-    static pcb_t dummy;
-    INIT_LIST_HEAD(&(dummy.p_list));
-    pcbFree = &dummy;
+    // Sentinella pcbFree
+    static pcb_t sen;
+    INIT_LIST_HEAD(&(sen.p_list));
+    pcbFree = &sen;
 
     pcbFree_h = &(pcbFree->p_list);
 
-    //aggiunta di tutti i pcb nella lista dei pcb liberi
+    // Aggiunta di tutti i pcb nella lista dei pcb liberi
     for(int i = 0; i < MAXPROC; i++){
         freePcb(&pcbFree_table[i]);
     }  
@@ -63,15 +55,15 @@ e restituisce l’elemento rimosso.
 pcb_t *allocPcb(){
     
     
-    /*controllo se la lista è vuota*/
+    // Controllo se la lista è vuota
     if(emptyProcQ(pcbFree_h)){
         return NULL;
     }
 
-    /*rimuovo un elemento da pcbFree_h*/
+    // Rimuovo un elemento da pcbFree_h
     pcb_t *rem = removeProcQ(pcbFree_h);
     
-    /*setto tutto a NULL/0*/
+    // Setto tutto a NULL/0
     rem->p_parent = NULL;
     INIT_LIST_HEAD(&(rem->p_child));
     INIT_LIST_HEAD(&(rem->p_list));
@@ -107,7 +99,6 @@ head è vuota, FALSE altrimenti.
 */
 
 int emptyProcQ(struct list_head *head){
-    /*WARNING: se da errore aggiunger &*/
     if(list_empty(head)){
         return TRUE;
     }
@@ -210,7 +201,7 @@ pcb_t *removeChild(pcb_t *p){
         return NULL;
     }
     else{
-        /*rimozione primo nodo*/
+        // Rimozione primo nodo
         pcb_t *rem = container_of(p->p_child.next,pcb_t,p_sib);
         list_del(&rem->p_sib);
     }   

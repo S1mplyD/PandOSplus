@@ -7,11 +7,15 @@ static struct list_head *semdFree_h;
 
 static struct list_head *semd_h;
 
+/*
+Restituisce il semaforo che ha chiave semKey
+*/
+
 semd_t *getSemd(int *semKey){
     struct list_head *it;
     list_for_each(it,semd_h){
         semd_t *curr = container_of(it,semd_t,s_link);
-        //il semaforo è presente nella asl
+        // Il semaforo è presente nella ASL
         if(curr->s_key == semKey){
             return curr;
         }
@@ -35,26 +39,25 @@ FALSE.
 
 int insertBlocked(int *semAdd,pcb_t *p){
     
-    struct semd_t *sem;
+    semd_t *sem;
 
     sem = getSemd(semAdd);
 
-    if(sem == NULL){ //Semaforo non presente
-        if(emptyProcQ(semdFree_h)){ //nessun semd disponibile
+    if(sem == NULL){ // Semaforo non presente
+        if(emptyProcQ(semdFree_h)){ // Nessun semd disponibile
             return TRUE;
         }
+
         sem = container_of(list_next(semdFree_h),semd_t,s_link);
-        //inizializzo parametri
+        // Set dei parametri
         sem->s_key = semAdd;
         INIT_LIST_HEAD(&(sem->s_procq));
-        //rimuovo da semdfree
-        list_del(&(sem->s_link));
-        //aggiungo a semd
-        list_add_tail(&(sem->s_link),semd_h);
 
+        list_del(&(sem->s_link));
+        list_add_tail(&(sem->s_link),semd_h);
     }
 
-    //Aggiungo il processo in coda
+    // Aggiungo p alla coda dei processi di sem
     p->p_semAdd = semAdd;
     insertProcQ(&(sem->s_procq),p);
 
@@ -82,12 +85,14 @@ pcb_t* removeBlocked(int *semAdd){
     if(sem == NULL){
         return NULL;
     }
-        
+
     pcb_t *p = removeProcQ(&sem->s_procq);
+
     if(emptyProcQ(&(sem->s_procq))){
         list_del(&(sem->s_link));
         list_add_tail(&(sem->s_link),semdFree_h);
     }
+
     return p;
 
 }
@@ -103,6 +108,7 @@ e lo inserisce nella coda dei descrittori liberi
 */
 
 pcb_t* outBlocked(pcb_t *p){
+
     semd_t *sem;
     sem = getSemd(p->p_semAdd);
 
@@ -146,19 +152,21 @@ l’inizializzazione della struttura dati.
 */
 
 void initASL(){
-    //array di SEMD con dimensione massima di MAX_PROC
+    // Array di semd con dimensione massima MAXPROC
     static semd_t semd_table[MAXPROC];
-    //Lista dei SEMD liberi o inutilizzati
+    
+    // Lista dei SEMD liberi o inutilizzati
     static semd_t *semdFree;
 
-    /*creazione sentinelle liste asl e semdfree*/
-    static semd_t dummy4Free;
-    static semd_t dummy4ASL;
-    INIT_LIST_HEAD(&(dummy4ASL.s_link));
-    INIT_LIST_HEAD(&(dummy4Free.s_link));
+    // Sentinelle semdFree e ASL
+    static semd_t senFree;
+    static semd_t senASL;
+    
+    INIT_LIST_HEAD(&(senASL.s_link));
+    INIT_LIST_HEAD(&(senFree.s_link));
 
-    semd_h = &(dummy4ASL.s_link);
-    semdFree = &dummy4Free;
+    semd_h = &(senASL.s_link);
+    semdFree = &senFree;
 
     int i = 0;
 
