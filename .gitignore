@@ -54,5 +54,6 @@ dkms.conf
 #vscode
 .vscode
 
-#term
+#emulator
 term0.umps
+machine
