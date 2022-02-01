@@ -53,3 +53,6 @@ dkms.conf
 
 #vscode
 .vscode
+
+#term
+term0.umps
