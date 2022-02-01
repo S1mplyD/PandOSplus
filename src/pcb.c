@@ -1,8 +1,8 @@
 #include "pcb.h"
+#include <pandos_types.h>
+#include <pandos_const.h>
 
-pcb_t pcbFree_table[MAXPROC];
-
-struct list_head pcbFree_h = LIST_HEAD_INIT(pcbFree_h);
+static struct list_head *pcbFree_h;
 
 /*
 Inizializza la lista pcbFree in modo da
@@ -12,9 +12,36 @@ essere chiamato una volta sola in fase di
 inizializzazione della struttura dati.
 */
 
+
 void initPcbs(){
-    for(int i = 0; i < MAXPROC; i++)
-        list_add_tail(&pcbFree_table[i],&pcbFree_h);
+    /*
+    static pcb_t pcbFree_table[MAXPROC];
+   
+    INIT_LIST_HEAD(pcbFree_h);
+
+    int i;
+    for(i = 0; i < MAXPROC; i++){
+        freePcb(&pcbFree_table[i]);
+    }*/
+    //array di PCB con dimensione massima di MAX_PROC
+    
+    static pcb_t pcbFree_table[MAXPROC];
+
+    //lista dei PCB liberi o inutilizzati
+    static pcb_t *pcbFree;
+
+    /* creazione sentinella lista pcbFree */
+    static pcb_t dummy;
+    INIT_LIST_HEAD(&(dummy.p_list));
+    pcbFree = &dummy;
+
+    pcbFree_h = &(pcbFree->p_list);
+
+    //aggiunta di tutti i pcb nella lista dei pcb liberi
+    for(int i = 0; i < MAXPROC; i++){
+        freePcb(&pcbFree_table[i]);
+    }  
+      
 }
 
 /*
@@ -23,7 +50,7 @@ dei PCB liberi (pcbFree_h)
 */
 
 void freePcb(pcb_t * p){
-    list_add_tail(&p,&pcbFree_h);
+    insertProcQ(pcbFree_h, p);
 }
 
 /*
@@ -34,30 +61,32 @@ e restituisce l’elemento rimosso.
 */
 
 pcb_t *allocPcb(){
-    pcb_t *rem;
     
-    //controllo se la lista è vuota
-    if(list_empty(&pcbFree_h))
+    
+    /*controllo se la lista è vuota*/
+    if(emptyProcQ(pcbFree_h)){
         return NULL;
+    }
 
-    //rimuovo un elemento da pcbFree_h
-    list_del(&pcbFree_h.next);
-
-    //setto tutto a NULL/0
+    /*rimuovo un elemento da pcbFree_h*/
+    pcb_t *rem = removeProcQ(pcbFree_h);
+    
+    /*setto tutto a NULL/0*/
     rem->p_parent = NULL;
-    INIT_LIST_HEAD(&rem->p_child);
-    INIT_LIST_HEAD(&rem->p_list);
-    INIT_LIST_HEAD(&rem->p_sib);
+    INIT_LIST_HEAD(&(rem->p_child));
+    INIT_LIST_HEAD(&(rem->p_list));
+    INIT_LIST_HEAD(&(rem->p_sib));
     rem->p_s.cause = 0;
     rem->p_s.entry_hi = 0;
-    for(int i = 0; i < STATE_GPR_LEN; i++)
+    int i;
+    for(i = 0; i < STATE_GPR_LEN; i++)
         rem->p_s.gpr[i] = 0;
     rem->p_s.hi = 0;
     rem->p_s.lo = 0;
     rem->p_s.pc_epc = 0;
     rem->p_s.status = 0;
     rem->p_time = 0;
-    rem->p_semAdd = 0;
+    rem->p_semAdd = NULL;
 
     return rem;
 
@@ -78,11 +107,14 @@ head è vuota, FALSE altrimenti.
 */
 
 int emptyProcQ(struct list_head *head){
-    //WARNING: se da errore aggiunger &
-    if(list_empty(head))
+    /*WARNING: se da errore aggiunger &*/
+    if(list_empty(head)){
         return TRUE;
-    else 
+    }
+    else {
         return FALSE;
+    }
+        
 }
 
 /*
@@ -91,7 +123,7 @@ coda dei processi puntata da head
 */
 
 void insertProcQ(struct list_head* head, pcb_t* p){
-    list_add_tail(head,p);
+    list_add_tail(p,head);
 }
 
 /*
@@ -102,9 +134,10 @@ non ha elementi.
 */
 
 pcb_t *headProcQ(struct list_head* head){
-    if(emptyProcQ(head))
+    if(emptyProcQ(head)){
         return NULL;
-    return container_of(head,pcb_t,p_list.next);
+    }
+    return container_of(head->next,pcb_t,p_list);
 }
 
 /*
@@ -115,12 +148,10 @@ all’elemento rimosso dalla lista
 */
 
 pcb_t* removeProcQ(struct list_head* head){
-    pcb_t *p = NULL;
-
+    pcb_t *p = headProcQ(head);
     if(emptyProcQ(head))
         return NULL;
-    list_del(container_of(head,pcb_t,p_list.next));
-    p = container_of(head,pcb_t,p_list.next);
+    list_del(&(p->p_list));
     return p;
 }
 
@@ -137,11 +168,13 @@ pcb_t* outProcQ(struct list_head* head, pcb_t *p){
 
         list_for_each(it,head){
             pcb_t *curr = container_of(it,pcb_t,p_list);
-            if(curr == it){
+            if(curr == p){
                 list_del(it);
+                return p;
             }
         }
     }
+    return NULL;
     
 }
 
@@ -172,12 +205,16 @@ Rimuove il primo figlio del PCB puntato
 da p. Se p non ha figli, restituisce NULL.
 */
 
-pcb_t* removeChild(pcb_t *p){
-    if(emptyChild(p))
+pcb_t *removeChild(pcb_t *p){
+    if(emptyChild(p)){
         return NULL;
-    //rimozione primo nodo
-    pcb_t *rem = container_of(p->p_child.next,pcb_t,p_sib);
-    list_del(&rem->p_sib);
+    }
+    else{
+        /*rimozione primo nodo*/
+        pcb_t *rem = container_of(p->p_child.next,pcb_t,p_sib);
+        list_del(&rem->p_sib);
+    }   
+    
 }
 
 /*
