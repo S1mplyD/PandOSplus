@@ -1,5 +1,7 @@
-#include "listx.h"
-#include <pandos_const.h>
+#ifndef PCB_H
+#define PCB_H
+
+#include <listx.h>
 #include <pandos_types.h>
 
 void initPcbs();
@@ -27,3 +29,5 @@ void insertChild(pcb_t *prnt,pcb_t *p);
 pcb_t* removeChild(pcb_t *p);
 
 pcb_t *outChild(pcb_t* p);
+
+#endif
