@@ -1,8 +1,9 @@
 #include "asl.h"
+#include "pcb.h"
+#include <pandos_types.h>
+#include <pandos_const.h>
 
-semd_t semd_table[MAXPROC];
-
-static struct list_head semdFree_h;
+static struct list_head *semdFree_h;
 
 static struct list_head *semd_h;
 
@@ -34,28 +35,28 @@ FALSE.
 
 int insertBlocked(int *semAdd,pcb_t *p){
     
-    semd_t *sem;
+    struct semd_t *sem;
 
     sem = getSemd(semAdd);
 
     if(sem == NULL){ //Semaforo non presente
-        if(list_empty(&semdFree_h)){ //nessun semd disponibile
+        if(emptyProcQ(semdFree_h)){ //nessun semd disponibile
             return TRUE;
         }
-        sem = container_of(list_next(&semdFree_h),semd_t,s_link);
+        sem = container_of(list_next(semdFree_h),semd_t,s_link);
         //inizializzo parametri
         sem->s_key = semAdd;
-        INIT_LIST_HEAD(&sem->s_procq);
+        INIT_LIST_HEAD(&(sem->s_procq));
         //rimuovo da semdfree
-        list_del(&sem->s_link);
+        list_del(&(sem->s_link));
         //aggiungo a semd
-        list_add_tail(&sem->s_link,semd_h);
+        list_add_tail(&(sem->s_link),semd_h);
 
     }
 
     //Aggiungo il processo in coda
     p->p_semAdd = semAdd;
-    insertProcQ(&sem->s_link,&p);
+    insertProcQ(&(sem->s_procq),p);
 
     return FALSE;
     
@@ -78,13 +79,14 @@ pcb_t* removeBlocked(int *semAdd){
     semd_t *sem;
     sem = getSemd(semAdd);
 
-    if(sem == NULL)
+    if(sem == NULL){
         return NULL;
-
+    }
+        
     pcb_t *p = removeProcQ(&sem->s_procq);
-    if(emptyProcQ(&sem->s_procq)){
-        list_del(&sem->s_link);
-        list_add_tail(&sem->s_link,&semdFree_h);
+    if(emptyProcQ(&(sem->s_procq))){
+        list_del(&(sem->s_link));
+        list_add_tail(&(sem->s_link),semdFree_h);
     }
     return p;
 
@@ -104,16 +106,17 @@ pcb_t* outBlocked(pcb_t *p){
     semd_t *sem;
     sem = getSemd(p->p_semAdd);
 
-    if(sem == NULL)
+    if(sem == NULL){
         return NULL;
+    }
     
-    pcb_t *p = outProcQ(&sem->s_procq, p);
-    if(emptyProcQ(&sem->s_procq)){
-        list_del(&sem->s_link);
-        list_add_tail(&sem->s_link,&semdFree_h);
+    pcb_t *pnew = outProcQ(&(sem->s_procq), p);
+    if(emptyProcQ(&(sem->s_procq))){
+        list_del(&(sem->s_link));
+        list_add_tail(&(sem->s_link),semdFree_h);
     }
 
-    return p;
+    return pnew;
 }
 
 /*
@@ -131,7 +134,7 @@ pcb_t* headBlocked(int *semAdd){
     if(sem == NULL)
         return NULL;
 
-    return headProcQ(&sem->s_procq);
+    return headProcQ(&(sem->s_procq));
 }
 
 /*
@@ -143,7 +146,25 @@ l’inizializzazione della struttura dati.
 */
 
 void initASL(){
-    for(int i = 0 ; i < MAXPROC; i++){
-        list_add_tail(&semd_table[i].s_link,&semdFree_h.next);
+    //array di SEMD con dimensione massima di MAX_PROC
+    static semd_t semd_table[MAXPROC];
+    //Lista dei SEMD liberi o inutilizzati
+    static semd_t *semdFree;
+
+    /*creazione sentinelle liste asl e semdfree*/
+    static semd_t dummy4Free;
+    static semd_t dummy4ASL;
+    INIT_LIST_HEAD(&(dummy4ASL.s_link));
+    INIT_LIST_HEAD(&(dummy4Free.s_link));
+
+    semd_h = &(dummy4ASL.s_link);
+    semdFree = &dummy4Free;
+
+    int i = 0;
+
+    for(i = 0;i<MAXPROC; i++){
+        list_add_tail(&(semd_table[i].s_link), &(semdFree->s_link));
     }
+
+    semdFree_h = &(semdFree->s_link);
 }
