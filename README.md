@@ -35,4 +35,4 @@ $ make clean
 
 ## Esecuzione 
 
-Creare una nuova macchine nella directory del programma, avviare la macchina ed eseguire il programma.
+Creare una nuova macchina nella directory del programma, avviare la macchina ed eseguire il programma.
