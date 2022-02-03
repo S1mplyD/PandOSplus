@@ -8,6 +8,7 @@ I seguenti pacchetti sono necessari per la compilazione:
 
 - mipsel-linux-gnu-gcc
 - umps3
+- make
 
 ## Installazione dei pacchetti
 
@@ -18,6 +19,10 @@ $ sudo apt install gcc-mipsel-linux-gnu
 Per installare umps3:
 ```bash
 $ sudo apt install umps3
+```
+Per installare make:
+```bash
+$ sudo apt install make
 ```
 
 ## Istruzioni per la compilazione
