@@ -13,11 +13,13 @@ endif
 
 # uMPS3-related paths
 UMPS3_DIR = $(UMPS3_DIR_PREFIX)/include/umps3
-INCLUDE_DIR = ./include
 UMPS3_DATA_DIR = $(UMPS3_DIR_PREFIX)/share/umps3
 
+#include path
+INCLUDE_DIR = ./include
+
 # Compiler options
-CFLAGS_LANG = -ffreestanding #-ansi
+CFLAGS_LANG = -ffreestanding
 CFLAGS_MIPS = -mips1 -mabi=32 -mno-gpopt -G 0 -mno-abicalls -fno-pic -mfp32
 CFLAGS = $(CFLAGS_LANG) $(CFLAGS_MIPS) -I${UMPS3_DIR} -I$(INCLUDE_DIR) -Wall -O0
 
@@ -38,7 +40,7 @@ kernel : src/pcb.o src/asl.o p1test.o crtso.o libumps.o
 	$(LD) -o $@ $^ $(LDFLAGS)
 
 clean :
-	-rm -f *.o src/*.o kernel kernel.*.umps *.o umps/*.o
+	-rm -f *.o src/*.o kernel kernel.*.umps
 
 # Pattern rule for assembly modules
 %.o : %.S
