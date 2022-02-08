@@ -4,6 +4,8 @@
 #include "listx.h"
 #include <pandos_types.h>
 
+semd_t *getSemd(int *semKey);
+
 int insertBlocked(int *semAdd,pcb_t *p);
 
 pcb_t* removeBlocked(int *semAdd);
