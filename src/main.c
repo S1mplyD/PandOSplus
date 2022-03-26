@@ -34,10 +34,10 @@ int main(){
     pcb_t *p = allocPcb();
     p->p_prio = PROCESS_PRIO_LOW;       //Setto priorità bassa al processo
     p->p_s.status = IEPON | USERPON;    //Abilitazione degli interrupt
-    p->p_s.cause = LOCALTIMERINT;
-    p->p_s.gpr[26] = RAMSTART;
-    p->p_s.pc_epc = (memaddr) test;
-    p->p_s.gpr[24] = &p->p_s.pc_epc;
+    p->p_s.cause = LOCALTIMERINT;       //Abilitazione interrupt timer locale
+    p->p_s.gpr[26] = RAMSTART;          //Setto sp all'inizio della RAM
+    p->p_s.pc_epc = (memaddr) test;     //Imposto PC
+    p->p_s.gpr[24] = &p->p_s.pc_epc;    
     //Imposto a 100ms l'Interval Timer
     LDIT(100);
 
@@ -46,10 +46,13 @@ int main(){
     p->p_child.next = NULL;
     p->p_sib.next = NULL;
     
+    //Imposto il tempo del processo a 0
     p->p_time = 0;
 
+    //Setto il puntatore al semafor a NULL
     p->p_semAdd = NULL;
 
+    //Setto la struttura di supporto a NULL
     p->p_supportStruct = NULL;
 
     processCount ++;
