@@ -1,45 +1,56 @@
 #include "pcb.h"
 #include "asl.h"
 #include "umps3/umps/const.h"
-
-void uTLB_RefillHandler () {
-setENTRYHI(0x80000000);
-setENTRYLO(0x00000000);
-TLBWR();
-LDST ((void*) 0x0FFFF000);
-}
+#include "scheduler.h"
 
 extern void test();
 
+extern void uTLB_refillHandler();
+
+extern void exception();
+
+passupvector_t *passUpVector;
+
+//Da usare in caso non vada 
+state_t initState;
+
 int main(){
     
-    int processCount = 0;           //Contatore processi vivi
+    processCount = 0;           //Contatore processi vivi
     int softBlockCounter = 0;       //Contatore processi bloccati
-    struct list_head readyQueue;    //Coda processi ready
-    pcb_t *currentProcess = NULL;   //Puntatore al pcb corrente allo stato di running
-    int semDevice[DEVICECNT];       //Semaforo dei device
+    currentProcess = NULL;   //Puntatore al pcb corrente allo stato di running
 
     mkEmptyProcQ(&readyQueue);      //Inizializzo la readyQueue come una lista di PCB vuota
 
     //Inizializzazione PCB e ASL
     initPcbs();
     initASL();
-    
+
+    //Inizializzazione passUpVector
+    passUpVector = (passupvector_t*) PASSUPVECTOR;
+    passUpVector->exception_handler = (memaddr) KERNELSTACK;
+    passUpVector->exception_stackPtr = (memaddr) KERNELSTACK;
+    passUpVector->tlb_refill_handler = (memaddr) uTLB_refillHandler;
+    passUpVector->tlb_refill_stackPtr = (memaddr) exception;
+
     //Inizializzazione device semafori a 0
     int i;
     for(i = 0; i < DEVICECNT; i++){
         semDevice[i] = 0;
     }
 
-    pcb_t *p = allocPcb();
-    p->p_prio = PROCESS_PRIO_LOW;       //Setto priorità bassa al processo
-    p->p_s.status = IEPON | USERPON;    //Abilitazione degli interrupt
-    p->p_s.cause = LOCALTIMERINT;       //Abilitazione interrupt timer locale
-    p->p_s.gpr[26] = RAMSTART;          //Setto sp all'inizio della RAM
-    p->p_s.pc_epc = (memaddr) test;     //Imposto PC
-    p->p_s.gpr[24] = &p->p_s.pc_epc;    
     //Imposto a 100ms l'Interval Timer
-    LDIT(100);
+    LDIT(PSECOND);
+
+    //Creazione processo
+    pcb_t *p = allocPcb();
+    p->p_prio = PROCESS_PRIO_LOW;               //Setto priorità bassa al processo
+    p->p_s.status = IEPON | IMON | TEBITON;     //Abilitazione degli interrupt
+    p->p_s.cause = LOCALTIMERINT;               //Abilitazione interrupt timer locale
+    p->p_s.gpr[26] = RAMSTART;                  //Setto sp all'inizio della RAM
+    p->p_s.pc_epc = (memaddr) test;             //Imposto PC
+    p->p_s.gpr[24] = &p->p_s.pc_epc;    
+    
 
     //Process Tree Fields to NULL
     p->p_parent = NULL;
@@ -57,6 +68,8 @@ int main(){
 
     processCount ++;
 
+    currentProcess = NULL;
+    insertProcQ(&(readyQueue),p);
+
     scheduler();
 }
-
