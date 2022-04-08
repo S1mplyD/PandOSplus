@@ -7,7 +7,7 @@ extern void test();
 
 extern void uTLB_refillHandler();
 
-extern void exception();
+extern void exceptionHandler();
 
 passupvector_t *passUpVector;
 
@@ -28,10 +28,10 @@ int main(){
 
     //Inizializzazione passUpVector
     passUpVector = (passupvector_t*) PASSUPVECTOR;
-    passUpVector->exception_handler = (memaddr) KERNELSTACK;
+    passUpVector->exception_handler = (memaddr) exceptionHandler;
     passUpVector->exception_stackPtr = (memaddr) KERNELSTACK;
     passUpVector->tlb_refill_handler = (memaddr) uTLB_refillHandler;
-    passUpVector->tlb_refill_stackPtr = (memaddr) exception;
+    passUpVector->tlb_refill_stackPtr = (memaddr) KERNELSTACK;
 
     //Inizializzazione device semafori a 0
     int i;
