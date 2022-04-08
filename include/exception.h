@@ -4,7 +4,6 @@
 #include "scheduler.h"
 #include "pcb.h"
 #include "asl.h"
-#include "umps3/umps/arch.h"
 
 void exceptionHandler();
 void passUpOrDie(int exceptionIndex, state_t *exceptionState);
