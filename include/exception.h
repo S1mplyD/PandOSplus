@@ -4,17 +4,23 @@
 #include "scheduler.h"
 #include "pcb.h"
 #include "asl.h"
+#include "string.h"
+#include "interrupts.h"
+#include "umps3/umps/cp0.h"
 
 void exceptionHandler();
-void passUpOrDie(int exceptionIndex, state_t *exceptionState);
-void syscallExceptionHandler(state_t *excstate);
+void passUpOrDie(int exceptionIndex);
+void syscallExceptionHandler();
 void Create_Process();
-void Passeren(int *semaddr);
-void Verhogen(int *semaddr);
+void Terminate_Process();
+void Passeren();
+void Verhogen();
+void Do_IO_Device();
 void Get_CPU_Time();
 void Wait_For_Clock();
 void Get_SUPPORTA_Data();
-void Get_Process_ID(int parent);
+void Get_Process_ID();
 void Yield();
+void *memcpy(void *dest, const void *src, size_t n);
 
 #endif
