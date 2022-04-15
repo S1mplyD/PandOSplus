@@ -3,6 +3,7 @@
 #include <pandos_const.h>
 
 static struct list_head *pcbFree_h;
+extern int pid;
 
 /*
 Inizializza la lista pcbFree in modo da
@@ -54,7 +55,6 @@ e restituisce l’elemento rimosso.
 
 pcb_t *allocPcb(){
     
-    
     // Controllo se la lista è vuota
     if(emptyProcQ(pcbFree_h)){
         return NULL;
@@ -72,13 +72,15 @@ pcb_t *allocPcb(){
     rem->p_s.entry_hi = 0;
     int i;
     for(i = 0; i < STATE_GPR_LEN; i++)
-        rem->p_s.gpr[i] = 0;
+       rem->p_s.gpr[i] = 0;
     rem->p_s.hi = 0;
     rem->p_s.lo = 0;
     rem->p_s.pc_epc = 0;
     rem->p_s.status = 0;
+    rem->p_prio = 0;
     rem->p_time = 0;
     rem->p_semAdd = NULL;
+    rem->p_pid = pid;
 
     return rem;
 
@@ -114,7 +116,7 @@ coda dei processi puntata da head
 */
 
 void insertProcQ(struct list_head* head, pcb_t* p){
-    list_add_tail(p,head);
+    list_add_tail(&p->p_list,head);
 }
 
 /*
@@ -197,13 +199,14 @@ da p. Se p non ha figli, restituisce NULL.
 */
 
 pcb_t *removeChild(pcb_t *p){
-    if(emptyChild(p)){
-        return NULL;
-    }
-    else{
+    if(!emptyChild(p)){
         // Rimozione primo nodo
         pcb_t *rem = container_of(p->p_child.next,pcb_t,p_sib);
-        list_del(&rem->p_sib);
+        list_del(&rem->p_child);
+        return rem;
+    }
+    else{
+        return NULL;
     }   
     
 }
