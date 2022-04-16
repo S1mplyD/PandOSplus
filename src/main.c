@@ -18,19 +18,15 @@ extern void uTLB_RefillHandler();
 extern void test();
 
 int main(){
-    klog_print("inizio main//");
     //Inizializzazione passUpVector
     passUpVector->tlb_refill_handler = (memaddr) uTLB_RefillHandler;
     passUpVector->tlb_refill_stackPtr = KERNELSTACK;
     passUpVector->exception_handler = (memaddr) exceptionHandler;
     passUpVector->exception_stackPtr = KERNELSTACK;
 
-    klog_print("pass up vector init//");
-
     //Inizializzazione PCB e ASL
     initPcbs();
     initASL();
-    klog_print("pcb asl init//");
 
     processCount = 0;            //Contatore processi vivi   
     softBlockCounter = 0;   //Contatore processi bloccati
@@ -38,18 +34,15 @@ int main(){
     mkEmptyProcQ(&LO_readyQueue);      //Inizializzo la LO_readyQueue come una lista di PCB vuota
     currentProcess = NULL;   //Puntatore al pcb corrente allo stato di running
     pid = 0;
-    klog_print("var init//");
 
     //Inizializzazione device semafori a 0
     int i;
     for(i = 0; i < 49; i++){
         semDevice[i] = 0;
     }
-    klog_print("sem init//");
 
     //Imposto a 100ms l'Interval Timer
     LDIT(PSECOND);
-    klog_print("it set//");
 
     //Creazione processo
     pcb_t *p = allocPcb();
@@ -71,9 +64,7 @@ int main(){
     p->p_semAdd = NULL;
     //Setto la struttura di supporto a NULL
     p->p_supportStruct = NULL;
-    klog_print("process init//");
     insertProcQ(&LO_readyQueue,p);
-    klog_print("after insertProcQ//");
     processCount++;
     
     scheduler();
