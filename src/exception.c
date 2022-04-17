@@ -10,6 +10,10 @@ extern int semDevice[49];
 extern int pid;
 state_t *exceptionState;
 cpu_t time;
+unsigned int timestamp_exception_start;
+unsigned int remaining_time_slice;
+unsigned int timestamp_process_job_start;
+unsigned int logger_time;
 
 void *memcpy(void *dest, const void *src, size_t n)
 {
@@ -22,6 +26,18 @@ void *memcpy(void *dest, const void *src, size_t n)
 
 void exceptionHandler()
 {
+
+    STCK(timestamp_exception_start);
+    if (currentProcess != NULL)
+    {
+        remaining_time_slice = getTIMER();
+        if ((int)remaining_time_slice > 0)
+        {
+            setTIMER(0xFFFFFFFF);
+        }
+        currentProcess->p_time += timestamp_exception_start - timestamp_process_job_start;
+    }
+    logger_time = 0;
 
     exceptionState = (state_t *)BIOSDATAPAGE;
     exceptionCode = CAUSE_GET_EXCCODE(exceptionState->cause);
@@ -161,89 +177,61 @@ void Passeren()
     pcb_t *un = NULL;
 
     int p_rc = passeren(semaddr, currentProcess, &un);
+    exceptionState->pc_epc += WORDLEN;
     if (p_rc == 0)
     {
         currentProcess->p_s = *exceptionState;
         currentProcess = NULL;
-        insertBlocked(semaddr, currentProcess);
+        exception_end_bill_before_schedule(currentProcess);
+    }
+    else
+    {
+        exception_end_bill_and_continue(currentProcess, currentProcess, exceptionState);
     }
 }
 
 void Verhogen()
 {
+    // Indirizzo del semaforo
     int *semaddr = (int *)exceptionState->reg_a1;
 
     pcb_t *un;
     int v_rc = verhogen(semaddr, currentProcess, &un);
+    exceptionState->pc_epc += WORDLEN;
+
     if (v_rc == 0)
     {
         currentProcess->p_s = *exceptionState;
         currentProcess = NULL;
-        insertBlocked(semaddr, currentProcess);
+        exception_end_bill_and_schedule(currentProcess);
+    }
+    else
+    {
+        exception_end_bill_and_continue(currentProcess, currentProcess, exceptionState);
     }
 }
 
 void Do_IO_Device()
 {
+    currentProcess->p_s = *exceptionState;
+    currentProcess->p_s.pc_epc += WORDLEN;
     int addr = exceptionState->reg_a1;  // commandAddr
     int value = exceptionState->reg_a2; // commandValue
 
-    currentProcess->p_s = *exceptionState;
-    currentProcess->p_s.pc_epc += WORDLEN;
-    int *semAddr;
-    int FLAG = FALSE;
-    memaddr devAddrBase;
-    for (int IntlineNo = 3; IntlineNo <= 6; IntlineNo++)
-    {
-        for (int DevNo = 0; DevNo < 8; DevNo++)
-        {
-            devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
-            if ((memaddr)addr == devAddrBase + 0x4)
-            {
-                int index = (IntlineNo - 3) * 8 + DevNo;
-                semAddr = &semDevice[index];
-                FLAG = TRUE;
-            }
-        }
-    }
-    if (FLAG != TRUE)
-    {
-        int IntlineNo = 7;
-        int baseTermSem = 32;
-        int foundMode = -1;
-        int DevNo = 0;
+    memaddr *ptr = (memaddr *)addr;
+    *ptr = value;
 
-        for (; DevNo < 8; DevNo++)
-        {
-
-            devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
-            if ((memaddr)addr == devAddrBase + 0x4)
-            {
-                // recv
-                foundMode = 0;
-                break;
-            }
-            else if ((memaddr)addr == devAddrBase + 0xc)
-            {
-                // transm
-                foundMode = 1;
-                break;
-            }
-            baseTermSem = baseTermSem + 2;
-        }
-
-        int index = (7 - 3) * 8 + DevNo + foundMode;
-        semAddr = &semDevice[index];
-    }
-
+    int *semAddr = findDeviceSemKey(addr);
     pcb_t *un = NULL;
     int p_rc = passeren(semAddr, currentProcess, &un);
     if (p_rc == 0)
     {
         currentProcess = NULL;
     }
+
     softBlockCounter++;
-    scheduler();
+
+    exception_end_bill_and_schedule(currentProcess);
 }
 
 void Get_CPU_Time()
@@ -281,7 +269,6 @@ void Get_Process_ID()
     {
         currentProcess->p_s.reg_v0 = currentProcess->p_parent->p_pid;
     }
-    
 }
 
 void Yield()
@@ -311,19 +298,8 @@ int passeren(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
     else if (headBlocked(sem_key) != NULL)
     {
         // *sem_key = 1 and there's a pcb blocked on the sem
-        pcb_t *p = removeBlocked(sem_key);
-        if (p->p_prio == 0)
-        {
-            insertProcQ(&LO_readyQueue, p);
-        }
-        else
-        {
-            insertProcQ(&HI_readyQueue, p);
-        }
-        unblocked_pcb = p;
-        if (unblocked_pcb)
-            return_code = 1;
-        // TOCHECK should we call the scheduler here or let the current process carry on?
+        *unblocked_pcb = setPcbToProperQueue(removeBlocked(sem_key));
+        return_code = 1;
     }
     else
     {
@@ -337,7 +313,6 @@ int passeren(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
 // todo document this kludge
 int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
 {
-
     int return_code;
 
     if (*sem_key == 1)
@@ -348,18 +323,9 @@ int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
     else if (headBlocked(sem_key) != NULL)
     {
         // *sem_key = 0 and there's a pcb blocked on the sem
-        pcb_t *tmp = removeBlocked(sem_key);
-        if (tmp->p_prio == 0)
-        {
-            insertProcQ(&LO_readyQueue, tmp);
-        }
-        else
-        {
-            insertProcQ(&HI_readyQueue, tmp);
-        }
-        *unblocked_pcb = tmp;
+        pcb_t *p = removeBlocked(sem_key);
+        *unblocked_pcb = setPcbToProperQueue(p);
         return_code = 1;
-        // TOCHECK should we call the scheduler here or let the current process carry on?
     }
     else
     {
@@ -368,4 +334,124 @@ int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
     }
 
     return return_code;
+}
+unsigned int calculate_exception_time()
+{
+    unsigned int time;
+    STCK(time);
+    return time - timestamp_exception_start - logger_time;
+}
+
+void bill_exception_time_to_process(pcb_t *pcb, unsigned int exception_time)
+{
+    // bill the process the exception time
+    pcb->p_time += exception_time;
+}
+
+void restart_timeslice(unsigned int exception_time)
+{
+    unsigned int timeslice = remaining_time_slice - exception_time;
+    if ((int)timeslice > 0)
+    {
+        // there's still time in this timeslice
+        setTIMER(timeslice);
+    }
+    else
+    {
+        // timeslice ended with this systemcall, make it trigger
+        setTIMER(0);
+    }
+}
+
+void exception_end_bill_before_continue(pcb_t *time_bill_pcb, pcb_t *time_slice_pcb)
+{
+    unsigned int exception_time = calculate_exception_time();
+    if (time_bill_pcb != NULL)
+    {
+        bill_exception_time_to_process(time_bill_pcb, exception_time);
+    }
+    if (time_slice_pcb != NULL)
+    {
+        if (time_bill_pcb->p_prio == 0 && remaining_time_slice > 0U)
+        {
+            restart_timeslice(exception_time);
+        }
+    }
+    STCK(timestamp_process_job_start);
+}
+
+void exception_end_bill_and_continue(pcb_t *time_bill_pcb, pcb_t *time_slice_pcb, state_t *saved_state)
+{
+    exception_end_bill_before_continue(time_bill_pcb, time_slice_pcb);
+    LDST(saved_state);
+}
+
+void exception_end_bill_before_schedule(pcb_t *time_bill_target)
+{
+    if (time_bill_target != NULL)
+    {
+        unsigned int exception_time = calculate_exception_time();
+        bill_exception_time_to_process(time_bill_target, exception_time);
+    }
+}
+
+void exception_end_bill_and_schedule(pcb_t *time_bill_target)
+{
+    exception_end_bill_before_schedule(time_bill_target);
+    scheduler();
+}
+
+int *findDeviceSemKey(memaddr command_addr)
+{
+    memaddr devAddrBase;
+    for (int IntlineNo = 3; IntlineNo <= 6; IntlineNo++)
+    {
+        for (int DevNo = 0; DevNo < 8; DevNo++)
+        {
+            devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+            if ((memaddr)command_addr == devAddrBase + 0x4)
+            {
+                return _findDeviceSemKey(IntlineNo, DevNo);
+            }
+        }
+    }
+
+    int IntlineNo = 7;
+    int baseTermSem = 32;
+    int foundMode = -1;
+    int DevNo = 0;
+    ;
+
+    for (; DevNo < 8; DevNo++)
+    {
+
+        devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+        if ((memaddr)command_addr == devAddrBase + 0x4)
+        {
+            // recv
+            foundMode = 0;
+            break;
+        }
+        else if ((memaddr)command_addr == devAddrBase + 0xc)
+        {
+            // transm
+            foundMode = 1;
+            break;
+        }
+        baseTermSem = baseTermSem + 2;
+    }
+
+    return _findTerminalSemKey(DevNo, foundMode);
+}
+
+int *_findDeviceSemKey(int line, int device)
+{
+    int key_index = (line - 3) * 8 + device;
+    return &semDevice[key_index];
+}
+
+int *_findTerminalSemKey(int device, int mode)
+{
+    int key_index = (7 - 3) * 8 + device + mode;
+    return &semDevice[key_index];
 }
