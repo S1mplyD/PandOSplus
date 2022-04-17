@@ -24,15 +24,17 @@ void scheduler()
             }
             else if (processCount > 0 && softBlockCounter > 0)
             {
+                klog_print("wait//");
                 // Abilito gli interrupt
-                setSTATUS(getSTATUS() | IECON | IMON);
+                setSTATUS((getSTATUS() | IECON| IMON));
                 // Carico un valore altissimo nel PLT
-                setTIMER(0xFFFFFF);
+                setTIMER(0xFFFFFFFF);
 
                 WAIT();
             }
             else if (processCount > 0 && softBlockCounter == 0)
             {
+                klog_print("panix//");
                 PANIC();
             }
         }
@@ -45,7 +47,6 @@ void scheduler()
             setTIMER(TIMESLICE);
             klog_print("setTimer//");
             LDST((void *)&currentProcess->p_s);
-            klog_print("fagiolini3//");
         }
     }
     else
@@ -54,7 +55,6 @@ void scheduler()
         currentProcess = removeProcQ(&HI_readyQueue);
         klog_print("fagiolini3.2//");
         LDST(&currentProcess->p_s);
-        klog_print("fagiolini3.1//");
     }
 
 }
