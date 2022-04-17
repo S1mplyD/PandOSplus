@@ -83,7 +83,7 @@ pcb_t *findPcb(struct list_head *queue, int pid)
     return 0;
 }
 
-void *setPcbToProperQueue(pcb_t *pcb)
+pcb_t *setPcbToProperQueue(pcb_t *pcb)
 {
     if(pcb != NULL){
         if(pcb->p_prio == 0){
@@ -93,4 +93,5 @@ void *setPcbToProperQueue(pcb_t *pcb)
             insertProcQ(&HI_readyQueue,pcb);
         }
     }
+    return pcb;
 }
