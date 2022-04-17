@@ -116,7 +116,7 @@ void Create_Process()
     {
         proc->p_s = *(state_t *)exceptionState->reg_a1;
         proc->p_prio = exceptionState->reg_a2;
-        if (exceptionState->reg_a3 != NULL)
+        if ((void *)exceptionState->reg_a3 != NULL)
             proc->p_supportStruct = (support_t *)exceptionState->reg_a3;
         proc->p_pid = ++pid;
         if (proc->p_prio == 0)
@@ -139,99 +139,135 @@ void Create_Process()
 // AKA Batman
 void Terminate_Process()
 {
+    int pidToKill = exceptionState->reg_a1;
 
-    outChild(currentProcess);
-
-    if (currentProcess == NULL)
+    if (pidToKill == 0)
     {
-        return;
-    }
-    if (!emptyChild(currentProcess))
-    {
-        removeChild(currentProcess);
-    }
-
-    if (currentProcess->p_semAdd < 0)
-    {
-        currentProcess->p_semAdd++;
+        killProcess(currentProcess);
     }
     else
     {
-        processCount -= 1;
-        softBlockCounter -= 1;
+        pcb_t *toKill = getPcb(pidToKill);
+        killProcess(toKill);
     }
 
-    outBlocked(currentProcess);
-    freePcb(currentProcess);
-    currentProcess = NULL;
     scheduler();
 }
 
 void Passeren()
 {
     int *semaddr = (int *)exceptionState->reg_a1;
-    semaddr--;
-    if (semaddr < 0)
+
+    pcb_t *un = NULL;
+
+    int p_rc = passeren(semaddr, currentProcess, &un);
+    if (p_rc == 0)
     {
+        currentProcess->p_s = *exceptionState;
+        currentProcess = NULL;
         insertBlocked(semaddr, currentProcess);
-        scheduler();
     }
 }
 
 void Verhogen()
 {
     int *semaddr = (int *)exceptionState->reg_a1;
-    semaddr++;
-    pcb_t *proc = removeBlocked(semaddr);
-    if (proc != NULL)
+
+    pcb_t *un;
+    int v_rc = verhogen(semaddr, currentProcess, &un);
+    if (v_rc == 0)
     {
-        if (proc->p_prio == 0)
-        {
-            insertProcQ(&LO_readyQueue, proc);
-        }
-        else
-        {
-            insertProcQ(&HI_readyQueue, proc);
-        }
+        currentProcess->p_s = *exceptionState;
+        currentProcess = NULL;
+        insertBlocked(semaddr, currentProcess);
     }
-    scheduler();
 }
 
 void Do_IO_Device()
 {
     int addr = exceptionState->reg_a1;  // commandAddr
     int value = exceptionState->reg_a2; // commandValue
-    int term = exceptionState->reg_a3;
-    // Se il device da usare è il terminale
-    if (addr == 7)
-    {
-        value = (value * 2) + term;
-    }
-    // Trovo il semaforo
-    int semIndex = (addr - 3) * 8 + value;
-    int sem = semDevice[semIndex];
-    sem--;
-    insertBlocked(&sem, currentProcess);
-    softBlockCounter++;
+
     currentProcess->p_s = *exceptionState;
+    currentProcess->p_s.pc_epc += WORDLEN;
+    int *semAddr;
+    int FLAG = FALSE;
+    memaddr devAddrBase;
+    for (int IntlineNo = 3; IntlineNo <= 6; IntlineNo++)
+    {
+        for (int DevNo = 0; DevNo < 8; DevNo++)
+        {
+            devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+            if ((memaddr)addr == devAddrBase + 0x4)
+            {
+                int index = (IntlineNo - 3) * 8 + DevNo;
+                semAddr = &semDevice[index];
+                FLAG = TRUE;
+            }
+        }
+    }
+    if (FLAG != TRUE)
+    {
+        int IntlineNo = 7;
+        int baseTermSem = 32;
+        int foundMode = -1;
+        int DevNo = 0;
+
+        for (; DevNo < 8; DevNo++)
+        {
+
+            devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+            if ((memaddr)addr == devAddrBase + 0x4)
+            {
+                // recv
+                foundMode = 0;
+                break;
+            }
+            else if ((memaddr)addr == devAddrBase + 0xc)
+            {
+                // transm
+                foundMode = 1;
+                break;
+            }
+            baseTermSem = baseTermSem + 2;
+        }
+
+        int index = (7 - 3) * 8 + DevNo + foundMode;
+        semAddr = &semDevice[index];
+    }
+
+    pcb_t *un = NULL;
+    int p_rc = passeren(semAddr, currentProcess, &un);
+    if (p_rc == 0)
+    {
+        currentProcess = NULL;
+    }
+    softBlockCounter++;
     scheduler();
 }
 
 void Get_CPU_Time()
 {
-    currentProcess->p_time += (TODLOADDR);
     exceptionState->reg_v0 = currentProcess->p_time;
+    exceptionState->pc_epc += WORDLEN;
 }
 // TODO passeren
 void Wait_For_Clock()
 {
-    // passeren(semDevice[48]);
+    pcb_t *un = NULL;
+    passeren(&semDevice[48], currentProcess, &un);
     softBlockCounter++;
+    exceptionState->pc_epc += WORDLEN;
+    currentProcess->p_s = *exceptionState;
+    LDST(&currentProcess->p_s);
+    scheduler();
 }
 
 void Get_SUPPORTA_Data()
 {
-    exceptionState->reg_v0 = (unsigned int)currentProcess->p_supportStruct;
+    exceptionState->reg_v0 = (memaddr)currentProcess->p_supportStruct;
+    exceptionState->pc_epc += WORDLEN;
+    LDST(&currentProcess->p_s);
 }
 
 void Get_Process_ID()
@@ -245,6 +281,7 @@ void Get_Process_ID()
     {
         currentProcess->p_s.reg_v0 = currentProcess->p_parent->p_pid;
     }
+    
 }
 
 void Yield()
@@ -261,48 +298,74 @@ void Yield()
     }
 }
 
-// int passeren(int *sem_key, pcb_t * pcb, pcb_t **unblocked_pcb){
+int passeren(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
+{
 
-//   int return_code;
+    int return_code;
 
-//   if (*sem_key == 0) {
-//     insertBlocked(sem_key, pcb);
-//     return_code = 0;
-//   }
-//   else if (headBlocked(sem_key) != NULL){
-//     // *sem_key = 1 and there's a pcb blocked on the sem
-//     *unblocked_pcb = returnPcbToQueue(removeBlocked(sem_key));
-//     return_code = 1;
-//     // TOCHECK should we call the scheduler here or let the current process carry on?
-//   }
-//   else {
-//     (*sem_key)--;
-//     return_code = 2;
-//   }
+    if (*sem_key == 0)
+    {
+        insertBlocked(sem_key, pcb);
+        return_code = 0;
+    }
+    else if (headBlocked(sem_key) != NULL)
+    {
+        // *sem_key = 1 and there's a pcb blocked on the sem
+        pcb_t *p = removeBlocked(sem_key);
+        if (p->p_prio == 0)
+        {
+            insertProcQ(&LO_readyQueue, p);
+        }
+        else
+        {
+            insertProcQ(&HI_readyQueue, p);
+        }
+        unblocked_pcb = p;
+        if (unblocked_pcb)
+            return_code = 1;
+        // TOCHECK should we call the scheduler here or let the current process carry on?
+    }
+    else
+    {
+        (*sem_key)--;
+        return_code = 2;
+    }
 
-//   return return_code;
-// }
+    return return_code;
+}
 
-// // todo document this kludge
-// int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb) {
+// todo document this kludge
+int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb)
+{
 
-//   int return_code;
+    int return_code;
 
-//   if (*sem_key == 1) {
-//     insertBlocked(sem_key, pcb);
-//     return_code = 0;
-//   }
-//   else if (headBlocked(sem_key) != NULL){
-//     // *sem_key = 0 and there's a pcb blocked on the sem
-//     pcb_t *tmp = removeBlocked(sem_key);
-//     *unblocked_pcb = returnPcbToQueue(tmp);
-//     return_code = 1;
-//     // TOCHECK should we call the scheduler here or let the current process carry on?
-//   }
-//   else {
-//     (*sem_key)++;
-//     return_code = 2;
-//   }
+    if (*sem_key == 1)
+    {
+        insertBlocked(sem_key, pcb);
+        return_code = 0;
+    }
+    else if (headBlocked(sem_key) != NULL)
+    {
+        // *sem_key = 0 and there's a pcb blocked on the sem
+        pcb_t *tmp = removeBlocked(sem_key);
+        if (tmp->p_prio == 0)
+        {
+            insertProcQ(&LO_readyQueue, tmp);
+        }
+        else
+        {
+            insertProcQ(&HI_readyQueue, tmp);
+        }
+        *unblocked_pcb = tmp;
+        return_code = 1;
+        // TOCHECK should we call the scheduler here or let the current process carry on?
+    }
+    else
+    {
+        (*sem_key)++;
+        return_code = 2;
+    }
 
-//   return return_code;
-// }
+    return return_code;
+}

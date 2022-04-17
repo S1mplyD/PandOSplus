@@ -7,6 +7,8 @@
 #include "string.h"
 #include "interrupts.h"
 #include "umps3/umps/cp0.h"
+#include "listx.h"
+#include "utility.h"
 
 void exceptionHandler();
 void passUpOrDie(int exceptionIndex);
@@ -22,5 +24,7 @@ void Get_SUPPORTA_Data();
 void Get_Process_ID();
 void Yield();
 void *memcpy(void *dest, const void *src, size_t n);
+int passeren(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb);
+int verhogen(int *sem_key, pcb_t *pcb, pcb_t **unblocked_pcb);
 
 #endif
