@@ -68,15 +68,15 @@ pcb_t *allocPcb(){
     INIT_LIST_HEAD(&(rem->p_child));
     INIT_LIST_HEAD(&(rem->p_list));
     INIT_LIST_HEAD(&(rem->p_sib));
-    rem->p_s.cause = 0;
-    rem->p_s.entry_hi = 0;
-    int i;
-    for(i = 0; i < STATE_GPR_LEN; i++)
-       rem->p_s.gpr[i] = 0;
-    rem->p_s.hi = 0;
-    rem->p_s.lo = 0;
-    rem->p_s.pc_epc = 0;
-    rem->p_s.status = 0;
+    // rem->p_s.cause = 0;
+    // rem->p_s.entry_hi = 0;
+    // int i;
+    // for(i = 0; i < STATE_GPR_LEN; i++)
+    //    rem->p_s.gpr[i] = 0;
+    // rem->p_s.hi = 0;
+    // rem->p_s.lo = 0;
+    // rem->p_s.pc_epc = 0;
+    // rem->p_s.status = 0;
     rem->p_prio = 0;
     rem->p_time = 0;
     rem->p_semAdd = NULL;
