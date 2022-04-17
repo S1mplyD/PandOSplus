@@ -21,4 +21,7 @@ pcb_t *getPcb(int pid);
 
 pcb_t *findPcb(struct list_head *queue, int pid);
 
+//Mette il pcb nell'apposita readyQueue
+void *setPcbToProperQueue(pcb_t *pcb);
+
 #endif
