@@ -1,121 +1,131 @@
-#include "interrupts.h"
+#include <umps3/umps/libumps.h>
+#include <umps3/umps/arch.h>
+#include <umps3/umps/cp0.h>
 
-extern int softBlockCounter;
-extern int semDevice[49];  
+#include <interrupts.h>
+#include <utility.h>
+#include <exception.h>
+#include <scheduler.h>
+#include <asl.h>
+
 extern pcb_t *currentProcess;
-extern struct list_head HI_readyQueue;  
-extern struct list_head LO_readyQueue;
+extern unsigned int ITtimeS;
+extern int semDevice[49];
+extern unsigned int cPStartT;
+extern int softBlockCounter;
 
-void interruptHandler(int exceptionCode){
-    int line = 2;
-    for(int i = 0 ; i < 8 ; i++){
-        if(exceptionCode & line){
-            interrupt(i);
-        }
-        line *= 2;
+void interruptHandler(state_t *exceptionState)
+{
+
+  int line;
+  for (line = 0; line < 8; line++)
+  {
+    if (exceptionState->cause & CAUSE_IP(line))
+    {
+      interrupt(line, exceptionState);
     }
+  }
 }
-
-void interrupt(int lineNumber){
-    //Non timer interrupts
-    if(lineNumber > 2) {
-        //Device
-        memaddr device = CDEV_BITMAP_BASE + ((lineNumber - 3) * 0x4);
-        int dev = 1;
-        for (int deviceNumber = 0; deviceNumber < DEVPERINT; deviceNumber ++){
-            if(device & dev){
-                unsigned int returnStatus;
-                //Salvo il codice di stato dal registro di device del device
-                devreg_t *devAddrBase = (devreg_t *)(DEV_REG_START + 
-                    ((lineNumber - 3) * 0x80) + (deviceNumber * 0x10));
-                if(lineNumber < 7){
-                    //Acknowledge dell'interrupt
-                    returnStatus = devAddrBase->dtp.status;
-                    devAddrBase->dtp.command = ACK;
-                    
-                }
-                else{
-                    //Terminale
-                    termreg_t *termreg = (termreg_t*)devAddrBase;
-                    if(termreg->recv_status != READY){
-                        returnStatus = termreg->recv_status;
-                        termreg->recv_command = ACK;
-                    }
-                    else{
-                        returnStatus = termreg->transm_status;
-                        termreg->transm_command = ACK;
-                    }
-                    deviceNumber *= 2;
-                }
-            //Faccio una operazione V
-                int semIndex = (lineNumber - 3) * 8 + deviceNumber;
-                semIndex++;
-                pcb_t *proc = removeBlocked((int *)semIndex);
-                if(proc !=NULL){
-                    proc->p_s.reg_v0 = returnStatus;
-                    proc->p_semAdd = NULL;
-                    softBlockCounter--;
-                    if(proc->p_prio == 0){
-                        insertProcQ(&LO_readyQueue,proc);
-                    }
-                    else {
-                        insertProcQ(&HI_readyQueue,proc);
-                    }
-                }    
-                
-            }
-            dev *=2;
-        }
-        if(currentProcess == NULL){
-            scheduler();
-        }
-        else{
-            LDST((state_t*)BIOSDATAPAGE);
-        }
+void interrupt(int lineNumber, state_t *exceptionState)
+{
+  if (lineNumber == 1)
+  {
+    // Processor Local Timer - PLT
+    setTIMER(0xFFFFFFFF);
+    // Copio lo stato del processore nel processo corrente
+    if (currentProcess != NULL)
+    {
+      currentProcess->p_s = *exceptionState;
+      // Metto il processo corrente nella readyQueue
+      setPcbToProperQueue(currentProcess);
+      setTimeNoSchedule(currentProcess);
+      currentProcess = NULL;
     }
-    //PLT Interrupts
-    else if (lineNumber == 1){
-        //Carico un nuovo valore nel timer
-        setTIMER(0xFFFFFF);
-        //Copio lo stato del processore nel processo corrente
-        currentProcess->p_s = *(state_t*)BIOSDATAPAGE;
-        //Metto il processo corrente nella readyQueue
-        if(currentProcess->p_prio == 0){
-                        insertProcQ(&LO_readyQueue,currentProcess);
-                    }
-                    else {
-                        insertProcQ(&HI_readyQueue,currentProcess);
 
-                    }
-        scheduler();
+    scheduler();
+  }
+  else if (lineNumber == 2)
+  {
+    // Interval Timer - Global timer
+
+    unsigned int time;
+    STCK(time);
+    unsigned int time_until_next_tick = ITtimeS - time;
+    LDIT(time_until_next_tick);
+    ITtimeS += PSECOND;
+
+    int *semAddr = &semDevice[48];
+    pcb_t *un = NULL;
+    int rc;
+    do
+    {
+      rc = verhogen(semAddr, NULL, &un);
+    } while (rc == 1);
+
+    semDevice[48] = 0;
+
+    resumeIfTimeLeft(currentProcess, 0);
+    STCK(cPStartT);
+    LDST(exceptionState);
+  }
+  
+  else if (lineNumber > 2)
+  {
+    // Device
+    devregarea_t *deviceRegs = (devregarea_t *)RAMBASEADDR;
+    unsigned int device_bitmap = deviceRegs->interrupt_dev[lineNumber - 3];
+    int dev = 0x1;
+    for (int deviceNumber = 0; deviceNumber < DEVPERINT; deviceNumber++)
+    {
+      if (device_bitmap & dev)
+      {
+        int *semAddr;
+        unsigned int returnStatus;
+        // Salvo il codice di stato dal registro di device del device
+        memaddr devAddrBase = DEV_REG_ADDR(lineNumber, deviceNumber);
+        // Non è terminale
+        if (lineNumber != 7)
+        {
+          // Acknowledge dell'interrupt
+          dtpreg_t *devStruct = (dtpreg_t *)devAddrBase;
+
+          // save the status code
+          returnStatus = devStruct->status;
+
+          // ACK
+          devStruct->command = ACK;
+
+          // Recover the semaphore key
+          semAddr = getDeviceSemAddr(lineNumber, deviceNumber);
+        }
+        else
+        {
+          int mode;
+          // Terminale
+          termreg_t *termreg = (termreg_t *)devAddrBase;
+          if ((termreg->recv_status & 0xFF) != READY && (termreg->recv_status & 0xFF) != BUSY)
+          {
+            mode = 0;
+            returnStatus = termreg->recv_status;
+            termreg->recv_command = ACK;
+          }
+          else
+          {
+            mode = 1;
+            returnStatus = termreg->transm_status;
+            termreg->transm_command = ACK;
+          }
+          semAddr = getTerminalSemAddr(deviceNumber, mode);
+        }
+        pcb_t *un = NULL;
+        verhogen(semAddr, NULL, &un);
+        if (un != NULL)
+        {
+          un->p_s.reg_v0 = returnStatus;
+        }
+        softBlockCounter--;
+        regToCurrentProcess(un, currentProcess, exceptionState);
+      }
     }
-    //Timer interrupt
-    else{
-        //Carico 100ms nel timer
-        LDIT(PSECOND);
-        while(headBlocked((int *)semDevice[49 - 1]) != NULL){
-            pcb_t *proc = removeBlocked((int *)semDevice[49 - 1]);
-
-            if(proc != NULL){
-                proc->p_semAdd = NULL;
-                if(proc->p_prio == 0){
-                        insertProcQ(&LO_readyQueue,proc);
-                    }
-                    else {
-                        insertProcQ(&HI_readyQueue,proc);
-
-                    }
-                softBlockCounter --;
-
-            }
-        }
-        semDevice[DEVICECNT - 1] = 0;
-        if(currentProcess == NULL){
-            scheduler();
-        }
-        else{
-            LDST((state_t*)BIOSDATAPAGE);
-        }
-        
-    }
+  }
 }

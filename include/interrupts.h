@@ -7,9 +7,11 @@
 #include "scheduler.h"
 #include "umps3/umps/const.h"
 #include "asl.h"
+#include "umps3/umps/cp0.h"
+#include "utility.h"
+#include "exception.h"
 
-
-void interruptHandler(int exceptionCode);
-void interrupt(int lineNumber);
+void interruptHandler(state_t *exceptionState);
+void interrupt(int lineNumber, state_t *exceptionState);
 
 #endif
