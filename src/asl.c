@@ -1,27 +1,32 @@
-#include "asl.h"
-#include "pcb.h"
 #include <pandos_types.h>
-#include <pandos_const.h>
+#include <pcb.h>
+#include <asl.h>
+#include <utility.h>
 
-static struct list_head *semdFree_h;
+static struct semd_t semd_table[MAXPROC];
 
-static struct list_head *semd_h;
+LIST_HEAD(semdFree_h);
+
+LIST_HEAD(semd_h);
 
 /*
 Restituisce il semaforo che ha chiave semKey
 */
-
-semd_t *getSemd(int *semKey){
-    struct list_head *it;
-    list_for_each(it,semd_h){
-        semd_t *curr = container_of(it,semd_t,s_link);
-        // Il semaforo è presente nella ASL
-        if(curr->s_key == semKey){
-            return curr;
-        }
+semd_t *getSemd(int *semKey)
+{
+  struct list_head *it;
+  list_for_each(it, &semd_h)
+  {
+    semd_t *curr = container_of(it, semd_t, s_link);
+    // Il semaforo è presente nella ASL
+    if (curr->s_key == semKey)
+    {
+      return curr;
     }
-    return NULL;
+  }
+  return NULL;
 }
+
 
 /*
 Viene inserito il PCB puntato da p nella coda dei
@@ -36,33 +41,34 @@ nuovo SEMD perché la lista di quelli liberi è vuota,
 restituisce TRUE. In tutti gli altri casi, restituisce
 FALSE. 
 */
+int insertBlocked(int *semAdd, pcb_t *p)
+{
 
-int insertBlocked(int *semAdd,pcb_t *p){
-    
-    semd_t *sem;
+  semd_t *sem;
 
-    sem = getSemd(semAdd);
+  sem = getSemd(semAdd);
 
-    if(sem == NULL){ // Semaforo non presente
-        if(emptyProcQ(semdFree_h)){ // Nessun semd disponibile
-            return TRUE;
-        }
-
-        sem = container_of(list_next(semdFree_h),semd_t,s_link);
-        // Set dei parametri
-        sem->s_key = semAdd;
-        INIT_LIST_HEAD(&(sem->s_procq));
-
-        list_del(&(sem->s_link));
-        list_add_tail(&(sem->s_link),semd_h);
+  if (sem == NULL)
+  { // Semaforo non presente
+    if (emptyProcQ(&semdFree_h))
+    { // Nessun semd disponibile
+      return TRUE;
     }
 
-    // Aggiungo p alla coda dei processi di sem
-    p->p_semAdd = semAdd;
-    insertProcQ(&(sem->s_procq),p);
+    sem = container_of(list_next(&semdFree_h), semd_t, s_link);
+    // Set dei parametri
+    sem->s_key = semAdd;
+    INIT_LIST_HEAD(&(sem->s_procq));
 
-    return FALSE;
-    
+    list_del(&(sem->s_link));
+    list_add_tail(&(sem->s_link), &semd_h);
+  }
+
+  // Aggiungo p alla coda dei processi di sem
+  p->p_semAdd = semAdd;
+  insertProcQ(&(sem->s_procq), p);
+
+  return FALSE;
 }
 
 /*
@@ -76,25 +82,27 @@ diventa vuota, rimuove il descrittore
 corrispondente dalla ASL e lo inserisce nella
 coda dei descrittori liberi (semdFree_h)
 */
+pcb_t *removeBlocked(int *semAdd)
+{
 
-pcb_t* removeBlocked(int *semAdd){
+  semd_t *sem;
+  sem = getSemd(semAdd);
 
-    semd_t *sem;
-    sem = getSemd(semAdd);
+  if (sem == NULL)
+  {
+    klog_print("removeBlocked == null//");
+    return NULL;
+  }
 
-    if(sem == NULL){
-        return NULL;
-    }
+  pcb_t *p = removeProcQ(&sem->s_procq);
 
-    pcb_t *p = removeProcQ(&sem->s_procq);
+  if (emptyProcQ(&(sem->s_procq)))
+  {
+    list_del(&(sem->s_link));
+    list_add_tail(&(sem->s_link), &semdFree_h);
+  }
 
-    if(emptyProcQ(&(sem->s_procq))){
-        list_del(&(sem->s_link));
-        list_add_tail(&(sem->s_link),semdFree_h);
-    }
-
-    return p;
-
+  return p;
 }
 
 /*
@@ -106,23 +114,25 @@ coda dei processi bloccati per il semaforo diventa
 vuota, rimuove il descrittore corrispondente dalla ASL
 e lo inserisce nella coda dei descrittori liberi
 */
+pcb_t *outBlocked(pcb_t *p)
+{
 
-pcb_t* outBlocked(pcb_t *p){
+  semd_t *sem;
+  sem = getSemd(p->p_semAdd);
 
-    semd_t *sem;
-    sem = getSemd(p->p_semAdd);
+  if (sem == NULL)
+  {
+    return NULL;
+  }
 
-    if(sem == NULL){
-        return NULL;
-    }
-    
-    pcb_t *pnew = outProcQ(&(sem->s_procq), p);
-    if(emptyProcQ(&(sem->s_procq))){
-        list_del(&(sem->s_link));
-        list_add_tail(&(sem->s_link),semdFree_h);
-    }
+  pcb_t *pnew = outProcQ(&(sem->s_procq), p);
+  if (emptyProcQ(&(sem->s_procq)))
+  {
+    list_del(&(sem->s_link));
+    list_add_tail(&(sem->s_link), &semdFree_h);
+  }
 
-    return pnew;
+  return pnew;
 }
 
 /*
@@ -132,15 +142,15 @@ SEMD con chiave semAdd. Ritorna NULL se il SEMD
 non compare nella ASL oppure se compare ma la sua
 coda dei processi è vuota.
 */
+pcb_t *headBlocked(int *semAdd)
+{
+  semd_t *sem;
+  sem = getSemd(semAdd);
 
-pcb_t* headBlocked(int *semAdd){
-    semd_t *sem;
-    sem = getSemd(semAdd);
+  if (sem == NULL)
+    return NULL;
 
-    if(sem == NULL)
-        return NULL;
-
-    return headProcQ(&(sem->s_procq));
+  return headProcQ(&(sem->s_procq));
 }
 
 /*
@@ -150,29 +160,10 @@ della semdTable. Questo metodo
 viene invocato una volta sola durante
 l’inizializzazione della struttura dati.
 */
-
-void initASL(){
-    // Array di semd con dimensione massima MAXPROC
-    static semd_t semd_table[MAXPROC];
-    
-    // Lista dei SEMD liberi o inutilizzati
-    static semd_t *semdFree;
-
-    // Sentinelle semdFree e ASL
-    static semd_t senFree;
-    static semd_t senASL;
-    
-    INIT_LIST_HEAD(&(senASL.s_link));
-    INIT_LIST_HEAD(&(senFree.s_link));
-
-    semd_h = &(senASL.s_link);
-    semdFree = &senFree;
-
-    int i = 0;
-
-    for(i = 0;i<MAXPROC; i++){
-        list_add_tail(&(semd_table[i].s_link), &(semdFree->s_link));
-    }
-
-    semdFree_h = &(semdFree->s_link);
+void initASL()
+{
+  for (int i = 0; i < MAXPROC; i++)
+  {
+    list_add(&semd_table[i].s_link, &semdFree_h);
+  }
 }

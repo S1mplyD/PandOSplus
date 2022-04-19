@@ -3,6 +3,7 @@
 
 #include "listx.h"
 #include <pandos_types.h>
+#include "klog.h"
 
 semd_t *getSemd(int *semKey);
 
