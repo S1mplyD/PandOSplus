@@ -3,6 +3,7 @@
 
 #include <pandos_types.h>
 
+void syscallExceptionHandler(state_t *exceptionState);
 void Create_Process(state_t *exceptionState);
 void Terminate_Process(state_t *exceptionState);
 void Passeren(state_t *exceptionState);

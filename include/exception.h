@@ -14,8 +14,6 @@
 
 void exceptionHandler();
 void passUpOrDie(int exceptionIndex, state_t *exceptionState);
-
-void *memcpy(void *dest, const void *src, size_t n);
 int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock);
 int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock);
 

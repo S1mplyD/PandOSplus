@@ -7,13 +7,13 @@
 #include <exception.h>
 #include <scheduler.h>
 
+extern struct list_head semd_h;
 extern pcb_t *currentProcess;
 extern int semDevice[49];
 extern int softBlockCounter;
-extern int processCount;
 extern struct list_head LO_readyQueue;
 extern struct list_head HI_readyQueue;
-extern struct list_head *semd_h;
+extern int processCount;
 
 void syscallExceptionHandler(state_t *exceptionState)
 {
@@ -60,14 +60,16 @@ void syscallExceptionHandler(state_t *exceptionState)
       break;
     }
   }
-  else if (processor_mode == 1 && (int)exceptionState->reg_a0 < 0)
+  else if (processor_mode == 1 && syscall < 0)
   {
+    klog_print("processor_mode == 1 && syscall < 0//\n");
     //Processore in usermode
     exceptionState->cause = (exceptionState->cause & ~CAUSE_EXCCODE_MASK) | (EXC_RI << CAUSE_EXCCODE_BIT);
     passUpOrDie(GENERALEXCEPT, exceptionState);
   }
   else
   {
+    klog_print("syscall >=0//\n");
     passUpOrDie(GENERALEXCEPT, exceptionState);
   }
 
@@ -75,7 +77,6 @@ void syscallExceptionHandler(state_t *exceptionState)
 
 void Create_Process(state_t *exceptionState)
 {
-  klog_print("Create_Process//\n");
   pcb_t *proc = allocPcb();
 
   if (proc == NULL)
@@ -100,7 +101,6 @@ void Create_Process(state_t *exceptionState)
 
 void Terminate_Process(state_t *exceptionState)
 {
-  klog_print("Terminate_Process//\n");
   int pidTokill = exceptionState->reg_a1;
 
   if (pidTokill == 0)
@@ -124,7 +124,6 @@ void Terminate_Process(state_t *exceptionState)
 
 void Passeren(state_t *exceptionState)
 {
-  klog_print("Passeren//\n");
   int *semaddr = (int *)exceptionState->reg_a1;
 
   pcb_t *un = NULL;
@@ -145,32 +144,27 @@ void Passeren(state_t *exceptionState)
 
 void Verhogen(state_t *exceptionState)
 {
-  klog_print("Verhogen//\n");
   // Indirizzo del semaforo
   int *semaddr = (int *)exceptionState->reg_a1;
 
   pcb_t *un = NULL;
   int v_rc = verhogen(semaddr, currentProcess, &un);
-  klog_print("after verhogen function//\n");
   exceptionState->pc_epc += WORDLEN;
 
   if (v_rc == 0)
   {
-    klog_print("rc==0//\n");
     currentProcess->p_s = *exceptionState;
     currentProcess = NULL;
     setTimeAndSchedule(currentProcess);
   }
   else
   {
-    klog_print("rc==1//\n");
     regToCurrentProcess(currentProcess, currentProcess, exceptionState);
   }
 }
 
 void Do_IO_Device(state_t *exceptionState)
 {
-  klog_print("DOIO//\n");
   currentProcess->p_s = *exceptionState;
   currentProcess->p_s.pc_epc += WORDLEN;
   int addr = exceptionState->reg_a1;  // commandAddr
@@ -194,7 +188,6 @@ void Do_IO_Device(state_t *exceptionState)
 
 void Get_CPU_Time(state_t *exceptionState)
 {
-  klog_print("CPUTIME//\n");
   exceptionState->reg_v0 = currentProcess->p_time;
   exceptionState->pc_epc += WORDLEN;
   regToCurrentProcess(currentProcess, currentProcess, exceptionState);
@@ -202,7 +195,6 @@ void Get_CPU_Time(state_t *exceptionState)
 
 void Wait_For_Clock(state_t *exceptionState)
 {
-  klog_print("WAITCLK//\n");
   pcb_t *unblocked = NULL;                              
   passeren(&semDevice[48], currentProcess, &unblocked); 
 
@@ -220,7 +212,6 @@ void Wait_For_Clock(state_t *exceptionState)
 
 void Get_SUPPORT_Data(state_t *exceptionState)
 {
-  klog_print("GETSUPPDATA//\n");
   exceptionState->reg_v0 = (memaddr)currentProcess->p_supportStruct;
   exceptionState->pc_epc += WORDLEN;
   regToCurrentProcess(currentProcess, currentProcess, exceptionState);
@@ -228,7 +219,6 @@ void Get_SUPPORT_Data(state_t *exceptionState)
 
 void Get_Process_ID(state_t *exceptionState)
 {
-  klog_print("GETPID//\n");
   if (exceptionState->reg_a1 == 0)
   {
     exceptionState->reg_v0 = currentProcess->p_pid;
@@ -250,7 +240,6 @@ void Get_Process_ID(state_t *exceptionState)
 
 void Yield(state_t *exceptionState)
 {
-  klog_print("YEET//\n");
   exceptionState->pc_epc += WORDLEN;
   currentProcess->p_s = *exceptionState;
 

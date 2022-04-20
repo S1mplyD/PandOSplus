@@ -11,16 +11,15 @@ unsigned int PLTTL;
 // Log del kernel
 unsigned int logT;
 
+extern struct list_head semd_h;
 extern pcb_t *currentProcess;
 extern int semDevice[49];
 extern int softBlockCounter;
-extern int processCount;
 extern struct list_head LO_readyQueue;
 extern struct list_head HI_readyQueue;
-extern struct list_head *semd_h;
+extern int processCount;
 
-void killProcess(pcb_t *pcb)
-{
+void killProcess(pcb_t *pcb) {
 
   struct list_head *it;
   list_for_each(it, &pcb->p_child)
@@ -67,75 +66,74 @@ void killProcess(pcb_t *pcb)
 Funzione che ritorna un processo con un determinato id
 */
 
-pcb_t *getPcb(int pid)
-{
+pcb_t *getPcb(int pid) {
+  pcb_t * result = NULL;
 
-  pcb_t *p;
-  if (currentProcess->p_pid == pid)
-  {
+  // check the currentProcess
+  if (currentProcess->p_pid == pid) {
     return currentProcess;
   }
 
-  p = findPcb(&LO_readyQueue, pid);
-  if (p != NULL)
-    return p;
-  p = findPcb(&HI_readyQueue, pid);
-  if (p != NULL)
-    return p;
-  struct list_head *iter_sem;
-  list_for_each(iter_sem, semd_h)
-  {
-    semd_t *sem = container_of(iter_sem, semd_t, s_link);
-    p = findPcb(&sem->s_procq, pid);
-    if (p != NULL)
-      return p;
+  // check the LO_readyQueue
+  result =  findPcb(&LO_readyQueue, pid);
+  if (result != NULL)
+    return result;
+
+  // check the HI_readyQueue
+  result =  findPcb(&HI_readyQueue, pid);
+  if (result != NULL)
+    return result;
+
+  // check every active semaphore
+  struct list_head* iter_sem;
+  list_for_each(iter_sem,&semd_h) {
+    semd_t * sem = container_of(iter_sem, semd_t, s_link);
+    // check its blocked process queue
+    result =  findPcb(&sem->s_procq, pid);
+    if (result != NULL)
+      return result;
   }
-  return 0;
+
+  return result;
 }
 
 /*
 Funzione che controlla tutti i pcb della coda finché non ne trova uno con il
 pid cercato
 */
-pcb_t *findPcb(struct list_head *queue, int pid)
-{
-  struct list_head *i;
-  list_for_each(i, queue)
-  {
-    pcb_t *res = container_of(i, pcb_t, p_list);
-    if (res->p_pid == pid)
-      return res;
+pcb_t * findPcb(struct list_head *list, int pid) {
+  struct list_head* iter;
+  list_for_each(iter,list) {
+    pcb_t *pcb = container_of(iter, pcb_t, p_list);
+    if (pcb->p_pid == pid) {
+      return pcb;
+    }
   }
-
-  return 0;
+  return NULL;
 }
 
 /*
 Funzione che mette un pcb nella sua apposita coda in base alla sua priorità
  */
-void setPcbToProperQueue(pcb_t *pcb)
-{
-  if (pcb != NULL)
-  {
-    if (pcb->p_prio == 0)
-    {
+void setPcbToProperQueue(pcb_t * pcb) {
+  if (pcb != NULL) {
+    if (pcb->p_prio == 0) {
       insertProcQ(&LO_readyQueue, pcb);
     }
-    else
-    {
+    else {
       insertProcQ(&HI_readyQueue, pcb);
     }
   }
 }
 
 // La seguente funziona alloca n caratteri dall'area di memoria src all'area di memoria dest
-void *memcpy(void *dest, const void *src, size_t n)
-{
-  for (size_t i = 0; i < n; i++)
-  {
-    ((char *)dest)[i] = ((char *)src)[i];
-  }
-  return 0;
+void memcpy(void* to, void* from, size_tt n){
+  // since we want to copy byte by byte, treat both pointers as char*
+  char *cfrom = (char *)from;
+  char *cto = (char *)to;
+  // copy byte by byte
+  for (int i=0; i<n; i++)
+    cto[i] = cfrom[i];
 }
 
 /*
@@ -210,55 +208,45 @@ void resumeIfTimeLeft(pcb_t *timeSlice, unsigned int excTime)
 /*
 Trova il semaforo nell'array dei semafori del device utilizzando il commandAddr
 */
-int *findDeviceSemKey(memaddr commandAddr)
-{
-  //Cerco tra tutti i device che non sono un terminale o IT, PLT e inter-process interrupt
+int *findDeviceSemKey(memaddr command_addr) {
   memaddr devAddrBase;
-  for (int lineNumber = 3; lineNumber <= 6; lineNumber++)
-  {
-    for (int deviceNumber = 0; deviceNumber < 8; deviceNumber++)
-    {
-      devAddrBase = DEV_REG_ADDR(lineNumber, deviceNumber);
-      if ((memaddr)commandAddr == devAddrBase + 0x4)
-      {
-        return getDeviceSemAddr(lineNumber, deviceNumber);
+  for(int IntlineNo = 3; IntlineNo <= 6; IntlineNo++) {
+    for(int DevNo = 0; DevNo < 8; DevNo++) {
+      devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+      if ((memaddr) command_addr == devAddrBase + 0x4 ) {
+        return getDeviceSemAddr(IntlineNo, DevNo);
       }
     }
   }
 
-  int lineNumber = 7;
-  int startTermSem = 32;
-  int termMode;
-  int deviceNumber;
+  int IntlineNo = 7;
+  int baseTermSem = 32;
+  int foundMode = -1;
+  int DevNo = 0;;
 
-  //Cerco tra i terminali
-  for (int deviceNumber = 0; deviceNumber < 8; deviceNumber++)
-  {
+  for(; DevNo < 8; DevNo++) {
 
-    devAddrBase = DEV_REG_ADDR(lineNumber, deviceNumber);
-    if ((memaddr)commandAddr == devAddrBase + 0x4)
-    {
+    devAddrBase = DEV_REG_ADDR(IntlineNo, DevNo);
+    if ((memaddr) command_addr == devAddrBase + 0x4) {
       // recv
-      termMode = 0;
+      foundMode = 0;
       break;
     }
-    else if ((memaddr)commandAddr == devAddrBase + 0xc)
-    {
+    else if ((memaddr) command_addr == devAddrBase + 0xc) {
       // transm
-      termMode = 1;
+      foundMode = 1;
       break;
     }
-    startTermSem = startTermSem + 2;
+    baseTermSem = baseTermSem + 2;
   }
 
-  return getTerminalSemAddr(deviceNumber, termMode);
+  return getTerminalSemAddr(DevNo, foundMode);
 }
 
 /*
 Ritorna la chiave del semaforo associato ad un dispositivo
 */
-int *getDeviceSemAddr(int line, int device)
-{
+int *getDeviceSemAddr(int line, int device) {
   int key_index = (line - 3) * 8 + device;
   return &semDevice[key_index];
 }
@@ -266,8 +254,7 @@ int *getDeviceSemAddr(int line, int device)
 /*
 Ritorna la chiave del semaforo associato al terminale
 */
-int *getTerminalSemAddr(int device, int mode)
-{
+int *getTerminalSemAddr(int device, int mode) {
   int key_index = (7 - 3) * 8 + device + mode;
   return &semDevice[key_index];
 }

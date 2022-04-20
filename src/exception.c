@@ -18,8 +18,11 @@ extern struct list_head LO_readyQueue;
 extern struct list_head HI_readyQueue;
 extern int processCount;
 
-void exceptionHandler()
-{
+
+/**
+ * Handle exceptions based on the exception code.
+ **/
+void exceptionHandler(){
 
   STCK(excTimeStart);
 
@@ -39,17 +42,17 @@ void exceptionHandler()
   logT = 0;
 
   state_t *exceptionState = (state_t *)BIOSDATAPAGE;
-  int exc_code = CAUSE_GET_EXCCODE(exceptionState->cause);
+  int exCode = CAUSE_GET_EXCCODE(exceptionState->cause);
 
-  if (exc_code == 0)
+  if (exCode == 0)
   {
     interruptHandler(exceptionState); //... semplicemente richiama l'Interrupt Handler
   }
-  else if (exc_code > 0 && exc_code < 4) // Qui vengono gestite le eccezioni di codice da 1 a 3 compresi
+  else if (exCode > 0 && exCode < 4) // Qui vengono gestite le eccezioni di codice da 1 a 3 compresi
   {
     passUpOrDie(PGFAULTEXCEPT, exceptionState);
   }
-  else if (exc_code == 8) // Qui vengono gestite delle eccezioni specifiche, diverse da quelle precedenti
+  else if (exCode == 8) // Qui vengono gestite delle eccezioni specifiche, diverse da quelle precedenti
   {
     syscallExceptionHandler(exceptionState);
   }
@@ -59,33 +62,56 @@ void exceptionHandler()
   }
 };
 
-void passUpOrDie(int index, state_t *exceptionState)
-{
 
-  if (currentProcess->p_supportStruct != NULL)
-  {
+//-------------------------
+//        UTILITIES
+//-------------------------
 
-    // Salvo l'eccezione nel currentProcess
+
+/**
+ * Perform a standard pass-up-or-die operation, delegating the the user's exception handler, if defined, killProcessing the
+ * process otherwise.
+ *
+ * @param index Either GENERALEXCEPT or PGFAULTEXCEPT
+ * @param exceptionState The state before the exception, saved in the bios data page
+ **/
+void passUpOrDie(int index, state_t *exceptionState) {
+
+  if (currentProcess->p_supportStruct != NULL) {
+    // PASS UP
+
+    // save to the process passup vector the current exception state
     currentProcess->p_supportStruct->sup_exceptState[index] = *exceptionState;
 
+    // recover the process passup vector context
     context_t context = currentProcess->p_supportStruct->sup_exceptContext[index];
 
-    regExcTime(currentProcess, currentProcess);
-
-    // Carico il context
+    // Handle time from here
+     regExcTime(currentProcess, currentProcess);
+    
+    // load the context
     LDCXT(context.stackPtr, context.status, context.pc);
   }
-  else
-  {
+  else {
+    // DIE
     killProcess(currentProcess);
 
     scheduler();
   }
 }
 
-/*
-Funzione che effettua una operazione P su un semaforo
-*/
+
+/**
+ * A Passeren operation a binary semaphore. Sometimes access to the unblocked pcb is needed, hence why the pointer to
+ * the pointer of a pcb in the arguments. This function is specular to the verhogen function.
+ *
+ * @param semAddr The address of the semaphore
+ * @param pcb The pcb of the process that called the P
+ * @param unblocked_pcb A pointer to the pointer to the unblocked pcb
+ *
+ * @return 0, if the calling process is blocked on the semaphore; 1, if the operation unblocked a pcb; 2, if the
+ * semaphore value got decremented
+ **/
 int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 {
 
@@ -113,9 +139,18 @@ int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
   return result;
 }
 
-/*
-Funzione che effettua una operazione V su un semaforo
-*/
+
+/**
+ * A Verhogen operation a binary semaphore. Sometimes access to the unblocked pcb is needed, hence why the pointer to
+ * the pointer of a pcb in the arguments. This function is specular to the passeren function.
+ *
+ * @param semAddr The address of the semaphore
+ * @param pcb The pcb of the process that called the P
+ * @param unblocked_pcb A pointer to the pointer to the unblocked pcb
+ *
+ * @return 0, if the calling process is blocked on the semaphore; 1, if the operation unblocked a pcb; 2, if the
+ * semaphore value got decremented
+ **/
 int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 {
 
@@ -132,7 +167,6 @@ int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
     pcb_t *p = removeBlocked(semAddr);
     setPcbToProperQueue(p);
     *unblock = p;
-    klog_print("setPcbToProperQueyeV_OK//");
     result = 1;
   }
   else
@@ -143,3 +177,4 @@ int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 
   return result;
 }
+

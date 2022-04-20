@@ -3,11 +3,13 @@
 #include <asl.h>
 #include <utility.h>
 
+extern struct list_head semd_h;
+extern pcb_t *currentProcess;
+extern int semDevice[49];
+extern int softBlockCounter;
 extern struct list_head LO_readyQueue;
 extern struct list_head HI_readyQueue;
-extern int softBlockCounter;
 extern int processCount;
-extern pcb_t *currentProcess;
 
 void scheduler()
 {

@@ -8,11 +8,13 @@
 #include <scheduler.h>
 #include <asl.h>
 
+extern struct list_head semd_h;
 extern pcb_t *currentProcess;
-extern unsigned int ITtimeS;
 extern int semDevice[49];
-extern unsigned int cPStartT;
 extern int softBlockCounter;
+extern struct list_head LO_readyQueue;
+extern struct list_head HI_readyQueue;
+extern int processCount;
 
 void interruptHandler(state_t *exceptionState)
 {
@@ -50,8 +52,7 @@ void interrupt(int lineNumber, state_t *exceptionState)
 
     unsigned int time;
     STCK(time);
-    unsigned int time_until_next_tick = ITtimeS - time;
-    LDIT(time_until_next_tick);
+    LDIT(ITtimeS - time);
     ITtimeS += PSECOND;
 
     int *semAddr = &semDevice[48];

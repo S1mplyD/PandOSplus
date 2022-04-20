@@ -3,7 +3,7 @@
 
 #include "listx.h"
 #include <pandos_types.h>
-#include "klog.h"
+extern struct list_head semd_h;
 
 semd_t *getSemd(int *semKey);
 
