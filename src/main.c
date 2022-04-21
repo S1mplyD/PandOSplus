@@ -22,7 +22,7 @@ struct list_head HI_readyQueue;
 pcb_t *currentProcess;
 
 // Semafori dei device
-int semDevice[MAXSEM];
+int semDevice[MAX_SEM];
 
 passupvector_t *passUpVector = (passupvector_t *)PASSUPVECTOR;
 
@@ -48,7 +48,7 @@ int main(void)
   currentProcess = NULL;
 
   // Setto tutti i semafori a 0
-  for (int i = 0; i < MAXSEM; i++)
+  for (int i = 0; i < MAX_SEM; i++)
   {
     semDevice[i] = 0;
   }
