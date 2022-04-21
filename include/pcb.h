@@ -1,8 +1,10 @@
 #ifndef PCB_H
 #define PCB_H
 
-#include <listx.h>
-#include <pandos_types.h>
+#include "pandos_types.h"
+#include "listx.h"
+
+extern int pid;
 
 void initPcbs();
 

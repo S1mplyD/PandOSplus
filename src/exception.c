@@ -1,29 +1,8 @@
-#include <umps3/umps/cp0.h>
-#include <umps3/umps/libumps.h>
-#include <umps3/umps/arch.h>
+#include "exception.h"
 
-#include <exception.h>
-#include <utility.h>
-#include <asl.h>
-#include <pcb.h>
-#include <syscalls.h>
-#include <interrupts.h>
-#include <scheduler.h>
-
-extern struct list_head semd_h;
-extern pcb_t *currentProcess;
-extern int semDevice[49];
-extern int softBlockCounter;
-extern struct list_head LO_readyQueue;
-extern struct list_head HI_readyQueue;
-extern int processCount;
-
-
-/**
- * Handle exceptions based on the exception code.
- **/
-void exceptionHandler(){
-
+void exceptionHandler()
+{
+  // Controllo il tempo dell'inizio dell'eccezione
   STCK(excTimeStart);
 
   if (currentProcess != NULL)
@@ -56,62 +35,40 @@ void exceptionHandler(){
   {
     syscallExceptionHandler(exceptionState);
   }
-  else
+  else // Qui vengono gestite le eccezioni da 4 a 7 e da 9 a 12
   {
     passUpOrDie(GENERALEXCEPT, exceptionState);
   }
 };
 
+void passUpOrDie(int index, state_t *exceptionState)
+{
 
-//-------------------------
-//        UTILITIES
-//-------------------------
-
-
-/**
- * Perform a standard pass-up-or-die operation, delegating the the user's exception handler, if defined, killProcessing the
- * process otherwise.
- *
- * @param index Either GENERALEXCEPT or PGFAULTEXCEPT
- * @param exceptionState The state before the exception, saved in the bios data page
- **/
-void passUpOrDie(int index, state_t *exceptionState) {
-
-  if (currentProcess->p_supportStruct != NULL) {
-    // PASS UP
-
-    // save to the process passup vector the current exception state
+  if (currentProcess->p_supportStruct != NULL)
+  {
+    // Salvo l'eccezione corrente nel currentProcess
     currentProcess->p_supportStruct->sup_exceptState[index] = *exceptionState;
 
-    // recover the process passup vector context
+    // Recupero il context dal currentProcess
     context_t context = currentProcess->p_supportStruct->sup_exceptContext[index];
 
-    // Handle time from here
-     regExcTime(currentProcess, currentProcess);
-    
-    // load the context
+    regExcTime(currentProcess, currentProcess);
+
+    // Carico il context
     LDCXT(context.stackPtr, context.status, context.pc);
   }
-  else {
-    // DIE
+  else
+  {
     killProcess(currentProcess);
 
     scheduler();
   }
 }
 
+/*
+Operazione P su semaforo
+*/
 
-/**
- * A Passeren operation a binary semaphore. Sometimes access to the unblocked pcb is needed, hence why the pointer to
- * the pointer of a pcb in the arguments. This function is specular to the verhogen function.
- *
- * @param semAddr The address of the semaphore
- * @param pcb The pcb of the process that called the P
- * @param unblocked_pcb A pointer to the pointer to the unblocked pcb
- *
- * @return 0, if the calling process is blocked on the semaphore; 1, if the operation unblocked a pcb; 2, if the
- * semaphore value got decremented
- **/
 int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 {
 
@@ -119,6 +76,7 @@ int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 
   if (*semAddr == 0)
   {
+    // Il processo è bloccato
     insertBlocked(semAddr, pcb);
     result = 0;
   }
@@ -126,6 +84,7 @@ int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
   {
     // Sblocco il pcb bloccato
     pcb_t *p = removeBlocked(semAddr);
+    // Metto il processo sbloccato nella sua apposita coda
     setPcbToProperQueue(p);
     *unblock = p;
     result = 1;
@@ -139,18 +98,9 @@ int passeren(int *semAddr, pcb_t *pcb, pcb_t **unblock)
   return result;
 }
 
-
-/**
- * A Verhogen operation a binary semaphore. Sometimes access to the unblocked pcb is needed, hence why the pointer to
- * the pointer of a pcb in the arguments. This function is specular to the passeren function.
- *
- * @param semAddr The address of the semaphore
- * @param pcb The pcb of the process that called the P
- * @param unblocked_pcb A pointer to the pointer to the unblocked pcb
- *
- * @return 0, if the calling process is blocked on the semaphore; 1, if the operation unblocked a pcb; 2, if the
- * semaphore value got decremented
- **/
+/*
+Operazione V su semaforo
+*/
 int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 {
 
@@ -158,6 +108,7 @@ int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 
   if (*semAddr == 1)
   {
+    // Il processo è bloccato
     insertBlocked(semAddr, pcb);
     result = 0;
   }
@@ -165,6 +116,7 @@ int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
   {
     // Sblocco il pcb bloccato
     pcb_t *p = removeBlocked(semAddr);
+    // Metto il processo sbloccato nella sua apposita coda
     setPcbToProperQueue(p);
     *unblock = p;
     result = 1;
@@ -177,4 +129,3 @@ int verhogen(int *semAddr, pcb_t *pcb, pcb_t **unblock)
 
   return result;
 }
-

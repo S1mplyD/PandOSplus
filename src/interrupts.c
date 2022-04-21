@@ -1,24 +1,8 @@
-#include <umps3/umps/libumps.h>
-#include <umps3/umps/arch.h>
-#include <umps3/umps/cp0.h>
-
-#include <interrupts.h>
-#include <utility.h>
-#include <exception.h>
-#include <scheduler.h>
-#include <asl.h>
-
-extern struct list_head semd_h;
-extern pcb_t *currentProcess;
-extern int semDevice[49];
-extern int softBlockCounter;
-extern struct list_head LO_readyQueue;
-extern struct list_head HI_readyQueue;
-extern int processCount;
+#include "interrupts.h"
 
 void interruptHandler(state_t *exceptionState)
 {
-
+  // Trovo chi ha sollevato l'interrupt
   int line;
   for (line = 0; line < 8; line++)
   {
@@ -40,7 +24,7 @@ void interrupt(int lineNumber, state_t *exceptionState)
       currentProcess->p_s = *exceptionState;
       // Metto il processo corrente nella readyQueue
       setPcbToProperQueue(currentProcess);
-      setTimeNoSchedule(currentProcess);
+      setPtimeToExcTime(currentProcess);
       currentProcess = NULL;
     }
 
@@ -49,19 +33,20 @@ void interrupt(int lineNumber, state_t *exceptionState)
   else if (lineNumber == 2)
   {
     // Interval Timer - Global timer
-
+    // Leggo il TOD
     unsigned int time;
     STCK(time);
+    // Cariclo l'interval timer
     LDIT(ITtimeS - time);
     ITtimeS += PSECOND;
 
     int *semAddr = &semDevice[48];
     pcb_t *un = NULL;
-    int rc;
+    int res;
     do
     {
-      rc = verhogen(semAddr, NULL, &un);
-    } while (rc == 1);
+      res = verhogen(semAddr, NULL, &un);
+    } while (res == 1);
 
     semDevice[48] = 0;
 
@@ -69,16 +54,16 @@ void interrupt(int lineNumber, state_t *exceptionState)
     STCK(cPStartT);
     LDST(exceptionState);
   }
-  
+
   else if (lineNumber > 2)
   {
     // Device
     devregarea_t *deviceRegs = (devregarea_t *)RAMBASEADDR;
-    unsigned int device_bitmap = deviceRegs->interrupt_dev[lineNumber - 3];
+    unsigned int deviceBitmap = deviceRegs->interrupt_dev[lineNumber - 3];
     int dev = 0x1;
     for (int deviceNumber = 0; deviceNumber < DEVPERINT; deviceNumber++)
     {
-      if (device_bitmap & dev)
+      if (deviceBitmap & dev)
       {
         int *semAddr;
         unsigned int returnStatus;

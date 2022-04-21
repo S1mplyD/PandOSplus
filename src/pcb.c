@@ -1,10 +1,7 @@
 #include "pcb.h"
-#include <pandos_types.h>
-#include <pandos_const.h>
 
 static pcb_t pcbFree_table[MAXPROC];
 LIST_HEAD(pcbFree_h);
-extern int pid;
 
 /*
 Inizializza la lista pcbFree in modo da

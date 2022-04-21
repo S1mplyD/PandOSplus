@@ -1,7 +1,4 @@
-#include <pandos_types.h>
-#include <pcb.h>
-#include <asl.h>
-#include <utility.h>
+#include "asl.h"
 
 static struct semd_t semd_table[MAXPROC];
 
@@ -27,11 +24,10 @@ semd_t *getSemd(int *semKey)
   return NULL;
 }
 
-
 /*
 Viene inserito il PCB puntato da p nella coda dei
 processi bloccati associata al SEMD con chiave
-semAdd. 
+semAdd.
 Se il semaforo corrispondente non è
 presente nella ASL, alloca un nuovo SEMD dalla
 lista di quelli liberi (semdFree) e lo inserisce nella
@@ -39,7 +35,7 @@ ASL, settando I campi in maniera opportuna (i.e.
 key e s_procQ). Se non è possibile allocare un
 nuovo SEMD perché la lista di quelli liberi è vuota,
 restituisce TRUE. In tutti gli altri casi, restituisce
-FALSE. 
+FALSE.
 */
 int insertBlocked(int *semAdd, pcb_t *p)
 {

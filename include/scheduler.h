@@ -1,13 +1,15 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
-#include "pandos_types.h"
-#include "umps3/umps/const.h"
-#include "umps3/umps/libumps.h"
 #include "pcb.h"
-#include "klog.h"
-#include "asl.h"
+#include "umps3/umps/libumps.h"
 #include "utility.h"
+
+extern pcb_t *currentProcess;
+extern int softBlockCounter;
+extern struct list_head LO_readyQueue;
+extern struct list_head HI_readyQueue;
+extern int processCount;
 
 void scheduler();
 

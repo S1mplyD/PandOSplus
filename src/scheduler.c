@@ -1,15 +1,4 @@
-#include <umps3/umps/libumps.h>
-#include <pcb.h>
-#include <asl.h>
-#include <utility.h>
-
-extern struct list_head semd_h;
-extern pcb_t *currentProcess;
-extern int semDevice[49];
-extern int softBlockCounter;
-extern struct list_head LO_readyQueue;
-extern struct list_head HI_readyQueue;
-extern int processCount;
+#include "scheduler.h"
 
 void scheduler()
 {
@@ -26,10 +15,11 @@ void scheduler()
                 // Non ci sono processi ad bassa priorità
                 if (processCount <= 0)
                 {
+                    // I processi sono finiti
                     HALT();
                 }
 
-                if (softBlockCounter > 0)
+                if (processCount > 0 && softBlockCounter > 0)
                 {
 
                     // Abilito gli interrupt
@@ -39,17 +29,21 @@ void scheduler()
 
                     WAIT();
                 }
-                else
+                else if (processCount > 0 && softBlockCounter == 0)
                 {
+                    // else if per sicurezzas
+                    // Ci sono processi non terminati, e nessun processo è nello stato "blocked"
                     PANIC();
                 }
             }
             else
             {
-
+                // Sono presenti processi con priorità bassa
+                // Prendo il primo processo dalla Low priority readyQueue
                 currentProcess = removeProcQ(&LO_readyQueue);
-
+                // Setto il tempo di inizio del processo
                 STCK(cPStartT);
+                // Metto nel PLT 5ms
                 setTIMER(TIMESLICE);
 
                 LDST((void *)&currentProcess->p_s);
@@ -57,9 +51,9 @@ void scheduler()
         }
         else
         {
-
+            // Sono presenti processi con priorità alta
             currentProcess = removeProcQ(&HI_readyQueue);
-
+            // Setto il tempo di inizio del processo
             STCK(cPStartT);
 
             LDST((void *)&currentProcess->p_s);
