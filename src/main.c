@@ -1,8 +1,8 @@
-#include <utility.h>
-#include <pcb.h>
-#include <asl.h>
-#include <exception.h>
-#include <scheduler.h>
+#include "pcb.h"
+#include "asl.h"
+#include "exception.h"
+#include "scheduler.h"
+#include "utility.h"
 
 extern int test();
 extern int uTLB_RefillHandler();
@@ -22,7 +22,7 @@ struct list_head HI_readyQueue;
 pcb_t *currentProcess;
 
 // Semafori dei device
-int semDevice[49];
+int semDevice[MAXSEM];
 
 passupvector_t *passUpVector = (passupvector_t *)PASSUPVECTOR;
 
@@ -35,6 +35,7 @@ int main(void)
   passUpVector->exception_handler = (memaddr)exceptionHandler;
   passUpVector->exception_stackPtr = KERNELSTACK;
 
+  // Inizializzo le strutture base
   initPcbs();
   initASL();
 
@@ -47,26 +48,28 @@ int main(void)
   currentProcess = NULL;
 
   // Setto tutti i semafori a 0
-  for (int i = 0; i < 49; i++)
+  for (int i = 0; i < MAXSEM; i++)
   {
     semDevice[i] = 0;
   }
 
-  //Carico 100 ms nell'interval timer
+  // Leggo il TOD
   STCK(ITtimeS);
   ITtimeS += 2 * PSECOND;
+  // Carico 100 ms nell'interval timer
   LDIT(PSECOND);
 
-  //Alloco un processo
+  // Alloco un processo
   pcb_t *p = allocPcb();
   // // Abilitazione degli interrupt
-  p->p_s.status = p->p_s.status | IEPON | TEBITON | IMON;
+  p->p_s.status = IEPON | TEBITON | IMON;
 
   // Setto sp all'inizio della RAM
   RAMTOP(p->p_s.reg_sp);
 
   // Imposto PC
-  p->p_s.pc_epc = p->p_s.reg_t9 = (memaddr)test;
+  p->p_s.pc_epc = (memaddr)test;
+  p->p_s.reg_t9 = (memaddr)test;
 
   // Aggiungo il processo alla Low Priority readyQueue
   insertProcQ(&LO_readyQueue, p);
