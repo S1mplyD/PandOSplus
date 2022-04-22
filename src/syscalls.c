@@ -51,14 +51,12 @@ void syscallExceptionHandler(state_t *exceptionState)
   }
   else if (processorMode == 1 && syscall < 0)
   {
-    klog_print("processorMode == 1 && syscall < 0//\n");
     // Processore in usermode
     exceptionState->cause = (exceptionState->cause & ~CAUSE_EXCCODE_MASK) | (EXC_RI << CAUSE_EXCCODE_BIT);
     passUpOrDie(GENERALEXCEPT, exceptionState);
   }
   else
   {
-    klog_print("syscall >=0//\n");
     passUpOrDie(GENERALEXCEPT, exceptionState);
   }
 }
@@ -149,9 +147,9 @@ void Passeren(state_t *exceptionState)
 
   pcb_t *un = NULL;
 
-  int p_rc = passeren(semaddr, currentProcess, &un);
+  int result = passeren(semaddr, currentProcess, &un);
   exceptionState->pc_epc += WORDLEN;
-  if (p_rc == 0)
+  if (result == 0)
   {
     currentProcess->p_s = *exceptionState;
     currentProcess = NULL;
@@ -175,10 +173,10 @@ void Verhogen(state_t *exceptionState)
   int *semaddr = (int *)exceptionState->reg_a1;
 
   pcb_t *un = NULL;
-  int v_rc = verhogen(semaddr, currentProcess, &un);
+  int result = verhogen(semaddr, currentProcess, &un);
   exceptionState->pc_epc += WORDLEN;
 
-  if (v_rc == 0)
+  if (result == 0)
   {
     currentProcess->p_s = *exceptionState;
     currentProcess = NULL;
@@ -207,13 +205,14 @@ void Do_IO_Device(state_t *exceptionState)
   int addr = exceptionState->reg_a1;  // commandAddr
   int value = exceptionState->reg_a2; // commandValue
 
+  //Imposto il value nell'indirizzo
   memaddr *ptr = (memaddr *)addr;
   *ptr = value;
 
   int *semAddr = findDeviceSemKey(addr);
   pcb_t *un = NULL;
-  int p_rc = passeren(semAddr, currentProcess, &un);
-  if (p_rc == 0)
+  int result = passeren(semAddr, currentProcess, &un);
+  if (result == 0)
   {
     currentProcess = NULL;
   }
@@ -278,7 +277,7 @@ void Get_SUPPORT_Data(state_t *exceptionState)
 /*
 SYSCALL -9: Get_Process_Id
 int SYSCALL(GETPROCESSID, int parent, 0, 0)
-– Restituisce l’identificatore del processo invocante se parent == 0, 
+– Restituisce l’identificatore del processo invocante se parent == 0,
     quello del genitore del processo invocante altrimenti.
 */
 void Get_Process_ID(state_t *exceptionState)
