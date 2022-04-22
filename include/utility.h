@@ -4,6 +4,7 @@
 // Una libreria di funzioni ausiliarie
 #include "pandos_types.h"
 #include "pcb.h"
+#include "asl.h"
 #include "scheduler.h"
 #include "umps3/umps/libumps.h"
 #include "umps3/umps/arch.h"
