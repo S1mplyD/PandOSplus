@@ -40,4 +40,4 @@ $ make clean
 
 ## Esecuzione 
 
-Creare una nuova macchina nella directory del programma, avviare la macchina, togliere la spunta da "Exceptions" ed eseguire il programma.
+Avviare la macchina già presente (machine), togliere la spunta da "Exceptions" ed eseguire il programma.
