@@ -86,7 +86,6 @@ pcb_t *removeBlocked(int *semAdd)
 
   if (sem == NULL)
   {
-    klog_print("removeBlocked == null//");
     return NULL;
   }
 
