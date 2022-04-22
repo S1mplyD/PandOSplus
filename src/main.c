@@ -10,8 +10,10 @@ extern int uTLB_RefillHandler();
 // processid
 int pid;
 
+//Contatore dei processi iniziati
 int processCount;
 
+//Contatore dei processi nello stato "blocked"
 int softBlockCounter;
 
 // ReadyQueue ad alta e bassa priorità
