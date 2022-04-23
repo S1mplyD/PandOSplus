@@ -13,7 +13,8 @@ endif
 
 # uMPS3-related paths
 UMPS3_DIR = $(UMPS3_DIR_PREFIX)/include/umps3
-UMPS3_DATA_DIR = $(UMPS3_DIR_PREFIX)/share/umps3
+UMPS3_DIR_2 = $(UMPS3_DIR_PREFIX)/include
+UMPS3_DATA_DIR = $(UMPS3_DIR_PREFIX)/share/umps3/
 
 #include path
 INCLUDE_DIR = ./include
@@ -21,7 +22,7 @@ INCLUDE_DIR = ./include
 # Compiler options
 CFLAGS_LANG = -ffreestanding
 CFLAGS_MIPS = -mips1 -mabi=32 -mno-gpopt -G 0 -mno-abicalls -fno-pic -mfp32
-CFLAGS = $(CFLAGS_LANG) $(CFLAGS_MIPS) -I${UMPS3_DIR} -I$(INCLUDE_DIR) -Wall -O0
+CFLAGS = $(CFLAGS_LANG) $(CFLAGS_MIPS) -I${UMPS3_DIR} -I$(UMPS3_DIR_2) -I$(INCLUDE_DIR) -Wall -O0
 
 # Linker options
 LDFLAGS = -G 0  -T $(UMPS3_DATA_DIR)/umpscore.ldscript
